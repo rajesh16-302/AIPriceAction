@@ -1,0 +1,3073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Price Action Terminal</title>
+  <script src="https://unpkg.com/lightweight-charts@5.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg-main: #0b0e14;
+      --bg-panel: #131722;
+      --bg-elevated: #1e222d;
+      --bg-hover: #2a2e39;
+      --border: #2a2e39;
+      --text-main: #d1d4dc;
+      --text-muted: #787b86;
+      --accent: #2962ff;
+      --teal: #14b8a6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --dock-w: 0px;   /* width of the docked scanner panel (set from JS) */
+      --side-w: 0px;   /* width of the pattern sidebar when open (set from JS) */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body {
+      background: var(--bg-main);
+      color: var(--text-main);
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: fixed;
+      inset: 0;
+    }
+
+    /* Fixed Top Bar (44px) */
+    .topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 44px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 6px;
+      z-index: 40;
+    }
+
+    /* Custom Editable Searchable Stock Dropdown */
+    .symbol-combo {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .symbol-combo input {
+      width: 185px;
+      background: var(--bg-elevated);
+      color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 24px 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      outline: none;
+    }
+    .symbol-combo input:focus { border-color: var(--accent); }
+    .symbol-clear-btn {
+      position: absolute;
+      right: 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 0 4px;
+      cursor: pointer;
+    }
+    .symbol-clear-btn:hover { background: transparent; color: #fff; }
+
+    .stock-dropdown-menu {
+      position: absolute;
+      top: 34px;
+      left: 0;
+      width: 340px;
+      max-height: 360px;
+      overflow-y: auto;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75);
+      display: none;
+      flex-direction: column;
+      z-index: 80;
+    }
+    .stock-dropdown-menu.open { display: flex; }
+    .stock-dropdown-meta {
+      padding: 5px 10px;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      background: #171c28;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+    }
+    .stock-option-item {
+      padding: 7px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(42, 46, 57, 0.45);
+      font-size: 12px;
+    }
+    .stock-option-item:hover, .stock-option-item.highlighted {
+      background: var(--bg-elevated);
+    }
+    .stock-option-sym {
+      font-weight: 700;
+      color: #60a5fa;
+      white-space: nowrap;
+    }
+    .stock-option-name {
+      color: var(--text-muted);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .bar-divider {
+      width: 1px;
+      height: 22px;
+      background: var(--border);
+      margin: 0 3px;
+      flex-shrink: 0;
+    }
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    button, select {
+      background: transparent;
+      color: var(--text-main);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 4px 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--bg-elevated); color: #fff; }
+    button.active {
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .top-right-controls {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pill-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    .pill-btn:hover { border-color: #434651; background: var(--bg-hover); }
+    .pill-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pill-btn.active-outline {
+      border-color: var(--accent);
+      background: rgba(41, 98, 255, 0.16);
+      color: #60a5fa;
+    }
+
+    /* Toolbar Dropdown Popovers (Scanners & Indicators) */
+    .dropdown-wrap { position: relative; }
+    .dropdown-popover {
+      position: absolute;
+      top: 34px;
+      right: 0;
+      width: 295px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+      padding: 8px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 60;
+    }
+    .dropdown-popover.open { display: flex; }
+    .pop-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 4px 5px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pop-list {
+      max-height: 210px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .pop-grid-6 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+    }
+    .pop-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .pop-item:hover { background: var(--bg-elevated); color: #fff; }
+    .scanner-menu-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 8px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      text-align: left;
+      width: 100%;
+    }
+    .scanner-menu-item:hover {
+      background: var(--bg-elevated);
+      border-color: rgba(45, 212, 191, 0.35);
+    }
+    .scanner-menu-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .scanner-menu-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: normal;
+      line-height: 1.3;
+    }
+
+    /* Fixed Left Drawing Toolbar (44px) */
+    .left-toolbar {
+      position: fixed;
+      top: 44px; left: 0; bottom: 0;
+      width: 44px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 0;
+      gap: 6px;
+      z-index: 30;
+    }
+    .tool-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      color: var(--text-main);
+      background: transparent;
+      border: 1px solid transparent;
+    }
+    .tool-btn:hover { background: var(--bg-elevated); color: #fff; }
+    .tool-btn.active {
+      background: rgba(41, 98, 255, 0.22);
+      border-color: var(--accent);
+      color: #60a5fa;
+    }
+    .tool-btn svg {
+      width: 17px; height: 17px;
+      stroke: currentColor; stroke-width: 1.75;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .tool-sep { width: 22px; height: 1px; background: var(--border); margin: 2px 0; }
+
+    /* Fixed Right Sidebar: Chart patterns (280px, collapsible) */
+    .right-sidebar {
+      position: fixed;
+      top: 44px; right: var(--dock-w); bottom: 0;
+      width: 280px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 30;
+      transition: transform 0.18s ease, right 0.18s ease;
+    }
+    .right-sidebar.collapsed { transform: translateX(100%); }
+    .sidebar-header {
+      height: 38px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex-shrink: 0;
+    }
+    .sidebar-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 15px;
+      padding: 2px 6px;
+    }
+    .sidebar-close:hover { color: #fff; background: var(--bg-elevated); }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .pattern-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(42, 46, 57, 0.65);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .pattern-row:hover { background: var(--bg-elevated); }
+    .pattern-row-left { display: flex; align-items: flex-start; gap: 9px; }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+    .dot-bullish { background: var(--green); }
+    .dot-bearish { background: var(--red); }
+    .dot-neutral { background: #eab308; }
+    .pattern-title { font-size: 12.5px; font-weight: 600; color: #e2e8f0; }
+    .pattern-dates { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .pattern-bias { font-size: 11.5px; font-weight: 500; text-transform: lowercase; }
+    .bias-bullish { color: var(--green); }
+    .bias-bearish { color: var(--red); }
+    .bias-neutral { color: #eab308; }
+
+    /* Center Chart Area */
+    .chart-wrapper {
+      position: fixed;
+      top: 44px;
+      left: 44px;
+      right: calc(var(--dock-w) + var(--side-w));
+      bottom: 0;
+      background: var(--bg-main);
+      overflow: hidden;
+      transition: right 0.18s ease;
+    }
+    body.resizing-dock { user-select: none; cursor: col-resize; }
+    body.resizing-dock .chart-wrapper,
+    body.resizing-dock .right-sidebar { transition: none !important; }
+    #chart-container { width: 100%; height: 100%; }
+    #draw-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+    }
+    #draw-canvas.drawing-active { pointer-events: auto; cursor: crosshair; }
+
+    /* Top-Left TradingView OHLCV Legend */
+    .tv-legend {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      z-index: 8;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .tv-legend-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tv-legend-ohlc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tv-legend-ohlc span b { font-weight: 500; color: var(--text-muted); }
+    #legend-plan { font-weight: 600; }
+
+    /* Floating Bottom-Center Chart Navigation Controls */
+    .chart-nav-controls {
+      position: absolute;
+      bottom: 34px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      opacity: 0.35;
+      transition: opacity 0.2s ease;
+    }
+    .chart-wrapper:hover .chart-nav-controls,
+    .chart-nav-controls:hover { opacity: 1; }
+    .nav-cluster { display: flex; align-items: center; gap: 6px; }
+    .chart-nav-btn {
+      width: 30px; height: 30px; padding: 0; border-radius: 6px;
+      background: rgba(30, 34, 45, 0.92); border: 1px solid var(--border);
+      color: var(--text-main); display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+    }
+    .chart-nav-btn:hover { background: var(--bg-hover); border-color: #434651; color: #fff; }
+    .chart-nav-btn svg {
+      width: 15px; height: 15px; stroke: currentColor; stroke-width: 2.2;
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* Scanner Modals */
+    .scanner-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(5, 8, 13, 0.78);
+      z-index: 70;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .scanner-backdrop.open { display: flex; }
+    .scanner-modal {
+      width: 1240px; max-width: 98vw; max-height: 88vh;
+      background: var(--bg-panel); border: 1px solid var(--border);
+      border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+    }
+    .scanner-header {
+      padding: 11px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: #171c28;
+    }
+    .scanner-header h3 { font-size: 14px; color: #2dd4bf; }
+    .scanner-controls {
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .scanner-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .scanner-textarea {
+      width: 100%; height: 46px;
+      background: var(--bg-main); color: var(--text-main);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 6px 10px; font-size: 11.5px; resize: vertical; outline: none; text-transform: uppercase;
+    }
+    .run-scan-btn {
+      background: var(--teal); border-color: var(--teal);
+      color: #062825; font-weight: 700; padding: 5px 14px;
+    }
+    .run-scan-btn:hover { background: #2dd4bf; color: #041d1b; }
+    .run-scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Scanner Results Filter Bar */
+    .scanner-filter-bar {
+      padding: 8px 16px;
+      background: #0f131c;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-input {
+      background: var(--bg-elevated);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 9px;
+      font-size: 12px;
+      outline: none;
+    }
+    .filter-input:focus { border-color: var(--accent); }
+    .excel-btn {
+      background: rgba(34, 197, 94, 0.16);
+      border: 1px solid rgba(34, 197, 94, 0.45);
+      color: #4ade80;
+      padding: 4px 11px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .excel-btn:hover { background: rgba(34, 197, 94, 0.28); color: #fff; }
+    .excel-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .scanner-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 10px 16px; }
+    table.scan-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    table.scan-table th {
+      position: sticky; top: 0; background: #171c28; color: var(--text-muted);
+      text-align: left; padding: 8px 8px; font-size: 10.5px; text-transform: uppercase;
+      border-bottom: 1px solid var(--border); z-index: 2; white-space: nowrap;
+    }
+    table.scan-table td { padding: 8px 8px; border-bottom: 1px solid #1e222d; white-space: nowrap; }
+    table.scan-table tr.scan-hit-row { cursor: pointer; }
+    table.scan-table tr.scan-hit-row:hover { background: #1e2536; }
+    .sym-link {
+      color: #60a5fa;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .scan-hit-row:hover .sym-link {
+      color: #93c5fd;
+      text-decoration: underline;
+    }
+    .pill-status { padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: inline-block; }
+    .pill-BREAKOUT { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+    .pill-MID { background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.4); }
+    .pill-LOW { background: rgba(234, 179, 8, 0.16); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.35); }
+
+    /* Scanner Pagination Footer */
+    .scanner-pagination {
+      padding: 8px 16px;
+      background: #171c28;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .page-controls { display: flex; align-items: center; gap: 6px; }
+
+    .header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    table.scan-table tr.scan-hit-row.selected {
+      background: #1b2a4a;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    /* ---- Docked scanner: behaves like the right-hand pattern panel ---- */
+    .scanner-backdrop.docked {
+      inset: 44px 0 0 auto;            /* top right bottom left */
+      width: var(--dock-w);
+      padding: 0;
+      background: var(--bg-panel);
+      z-index: 35;
+      align-items: stretch;
+      justify-content: stretch;
+      transition: width 0.18s ease;
+    }
+    body.resizing-dock .scanner-backdrop.docked { transition: none; }
+    .scanner-backdrop.docked .scanner-modal {
+      width: 100% !important;
+      max-width: 100%;
+      max-height: none;
+      height: 100%;
+      border-radius: 0;
+      border: none;
+      border-left: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .scanner-backdrop.docked .scanner-header { padding: 8px 10px; }
+    .scanner-backdrop.docked .scanner-header h3 { font-size: 12.5px; }
+    .scanner-backdrop.docked .scanner-header h3 span { display: none; }
+    .scanner-backdrop.docked .scanner-controls { padding: 8px 10px; }
+    .scanner-backdrop.docked .scanner-textarea { display: none; }
+    .scanner-backdrop.docked .scanner-filter-bar { padding: 6px 10px; }
+    .scanner-backdrop.docked .scanner-table-wrap { padding: 0 8px 8px; }
+    .scanner-backdrop.docked .scanner-pagination {
+      padding: 6px 10px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    #dock-resizer {
+      position: fixed;
+      top: 44px; bottom: 0;
+      right: calc(var(--dock-w) - 3px);
+      width: 6px;
+      cursor: col-resize;
+      z-index: 36;
+      display: none;
+      touch-action: none;
+    }
+    #dock-resizer:hover, #dock-resizer.dragging { background: rgba(41, 98, 255, 0.5); }
+  </style>
+</head>
+<body>
+
+  <!-- Fixed Top Bar -->
+  <div class="topbar">
+    <div class="symbol-combo" id="symbol-combo-wrap">
+      <input
+        type="text"
+        id="symbol-input"
+        value="^NSEI"
+        placeholder="Search 2,200+ NSE stocks..."
+        autocomplete="off"
+      />
+      <button type="button" class="symbol-clear-btn" id="clear-symbol-btn" title="Clear & Browse Stocks">✕</button>
+      <div class="stock-dropdown-menu" id="stock-dropdown-menu">
+        <div class="stock-dropdown-meta" id="stock-dropdown-meta">Loading NSE universe...</div>
+        <div id="stock-dropdown-list"></div>
+      </div>
+    </div>
+    <button id="load-symbol-btn" class="pill-btn" title="Load Symbol">Go</button>
+
+    <div class="bar-divider"></div>
+
+    <!-- Timeframes (1m to M) -->
+    <div class="btn-group" id="tf-buttons">
+      <button data-tf="1m" data-label="1m">1m</button>
+      <button data-tf="3m" data-label="3m">3m</button>
+      <button data-tf="5m" data-label="5m">5m</button>
+      <button data-tf="15m" data-label="15m">15m</button>
+      <button data-tf="30m" data-label="30m">30m</button>
+      <button data-tf="1h" data-label="1H">1H</button>
+      <button data-tf="2h" data-label="2H">2H</button>
+      <button data-tf="4h" data-label="4H">4H</button>
+      <button data-tf="1d" data-label="D" class="active">D</button>
+      <button data-tf="1wk" data-label="W">W</button>
+      <button data-tf="1mo" data-label="M">M</button>
+    </div>
+
+    <div class="bar-divider"></div>
+
+    <!-- Preset View Modes -->
+    <div class="btn-group" id="mode-buttons">
+      <button data-mode="clean" class="active">Clean</button>
+      <button data-mode="structure">Structure</button>
+      <button data-mode="patterns">Patterns</button>
+      <button data-mode="everything" >Everything</button>
+      <button data-mode="custom">Custom</button>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="top-right-controls">
+      <!-- Scanners Dropdown -->
+      <div class="dropdown-wrap">
+        <button class="pill-btn" id="scanners-btn">Scanners ▾</button>
+        <div class="dropdown-popover" id="scanners-popover" style="width: 295px;">
+          <div class="pop-header"><span>Market Screeners</span></div>
+          <button type="button" class="scanner-menu-item" id="menu-open-ch">
+            <span class="scanner-menu-title">🏆 Cup &amp; Handle Screener</span>
+            <span class="scanner-menu-desc">60% Low Cheat, 80% Mid Cheat, Handle Pivot, Handle SL &amp; 100% Rim Breakout.</span>
+          </button>
+          <button type="button" class="scanner-menu-item" id="menu-open-myb">
+            <span class="scanner-menu-title">🚀 Multi-Year Breakout Scanner</span>
+            <span class="scanner-menu-desc">2Y, 3Y, 5Y &amp; All-Time High breakouts, retests, and pre-breakout coils.</span>
+          </button>
+          <button type="button" class="scanner-menu-item" id="menu-open-hl">
+            <span class="scanner-menu-title">📊 Weekly HL / LL Scanner</span>
+            <span class="scanner-menu-desc">Weekly Higher Low / Lower Low detector with 30W SMA &amp; RSI reversal forecast.</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Indicators Dropdown -->
+      <div class="dropdown-wrap">
+        <button class="pill-btn" id="indicators-btn">Indicators ▾</button>
+        <div class="dropdown-popover" id="indicators-popover">
+          <div class="pop-header"><span>Price Action &amp; Volume</span></div>
+          <label class="pop-item"><input type="checkbox" id="chk-sr" /> Support &amp; Resistance (Dynamic)</label>
+          <label class="pop-item"><input type="checkbox" id="chk-smc" /> Swings (HH/HL) &amp; BOS/CHoCH</label>
+          <label class="pop-item"><input type="checkbox" id="chk-tl" /> Auto Trendlines (3+ Touches)</label>
+          <label class="pop-item"><input type="checkbox" id="chk-vol" /> Volume Histogram</label>
+
+          <div class="pop-header">
+            <span>Trade Plan Levels</span>
+            <div>
+              <button id="plan-all" style="padding:1px 5px; font-size:10px;">All</button>
+              <button id="plan-none" style="padding:1px 5px; font-size:10px;">None</button>
+            </div>
+          </div>
+          <div class="pop-grid-6" id="plan-level-toggles">
+            <label class="pop-item"><input type="checkbox" data-plan="entry" checked /> <span>Entry</span></label>
+            <label class="pop-item"><input type="checkbox" data-plan="sl" checked /> <span>SL</span></label>
+            <label class="pop-item"><input type="checkbox" data-plan="tsl" checked /> <span>TSL</span></label>
+            <label class="pop-item"><input type="checkbox" data-plan="t1" checked /> <span>T1</span></label>
+            <label class="pop-item"><input type="checkbox" data-plan="t2" checked /> <span>T2</span></label>
+            <label class="pop-item"><input type="checkbox" data-plan="t3" checked /> <span>T3</span></label>
+          </div>
+
+          <div class="pop-header">
+            <span>Chart Patterns (14)</span>
+            <div>
+              <button id="patterns-all" style="padding:1px 5px; font-size:10px;">All</button>
+              <button id="patterns-none" style="padding:1px 5px; font-size:10px;">None</button>
+            </div>
+          </div>
+          <div class="pop-list" id="pattern-toggles"></div>
+          <label class="pop-item"><input type="checkbox" id="chk-cup-latest" checked /> Cup &amp; Handle: latest only</label>
+        </div>
+      </div>
+
+      <button class="pill-btn active-outline" id="toggle-sidebar-btn">Patterns (0)</button>
+    </div>
+  </div>
+
+  <!-- Fixed Left Drawing Toolbar -->
+  <div class="left-toolbar">
+    <button class="tool-btn active" data-tool="cursor" title="Crosshair / Pan">
+      <svg viewBox="0 0 24 24"><path d="M4 4l7 17 2.5-6.5L20 12 4 4z"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="line" title="Trend Line">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/><line x1="6.5" y1="17.5" x2="17.5" y2="6.5"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="hline" title="Horizontal Ray / Line">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="12" cy="12" r="2"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="box" title="Rectangle / Supply-Demand Zone">
+      <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="fib" title="Fib Retracement Levels">
+      <svg viewBox="0 0 24 24"><line x1="4" y1="5" x2="20" y2="5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="4" y1="19" x2="20" y2="19"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="brush" title="Freehand Brush">
+      <svg viewBox="0 0 24 24"><path d="M18 3a3 3 0 0 1 3 3L9 18l-5 1 1-5L18 3z"/></svg>
+    </button>
+
+    <div class="tool-sep"></div>
+
+    <button class="tool-btn" id="toggle-drawings-vis" title="Hide / Show Drawings">
+      <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="tool-btn" id="undo-drawing" title="Undo Last Drawing">
+      <svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+    </button>
+    <button class="tool-btn" id="clear-drawings" title="Delete All Drawings">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </button>
+  </div>
+
+  <!-- Center Chart Area -->
+  <div class="chart-wrapper" id="chart-wrapper">
+    <div class="tv-legend">
+      <div class="tv-legend-title" id="legend-title">NIFTY 50 · D · yfinance</div>
+      <div class="tv-legend-ohlc" id="legend-ohlc">Loading market data...</div>
+      <div class="tv-legend-ohlc" id="legend-plan"></div>
+    </div>
+
+    <div id="chart-container"></div>
+    <canvas id="draw-canvas"></canvas>
+
+    <!-- Floating Bottom-Center Navigation Controls -->
+    <div class="chart-nav-controls">
+      <div class="nav-cluster">
+        <button class="chart-nav-btn" id="nav-zoom-out" title="Zoom Out (-)">
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="chart-nav-btn" id="nav-zoom-in" title="Zoom In (+)">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="nav-cluster">
+        <button class="chart-nav-btn" id="nav-scroll-left" title="Scroll Left (←)">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="chart-nav-btn" id="nav-scroll-right" title="Scroll Right (→)">
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="nav-cluster">
+        <button class="chart-nav-btn" id="nav-reset" title="Reset Chart View (Alt+R)">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fixed Right Sidebar: Chart patterns -->
+  <div class="right-sidebar" id="right-sidebar">
+    <div class="sidebar-header">
+      <span>Chart patterns</span>
+      <button class="sidebar-close" id="close-sidebar-btn" title="Close Panel">✕</button>
+    </div>
+    <div class="history-list" id="pattern-history-list"></div>
+  </div>
+
+  <!-- Drag handle for resizing the docked scanner panel -->
+  <div id="dock-resizer" title="Drag to resize"></div>
+
+  <!-- 1. Cup & Handle Scanner Modal -->
+  <div class="scanner-backdrop" id="scanner-modal">
+    <div class="scanner-modal">
+      <div class="scanner-header">
+        <h3>🏆 Cup &amp; Handle Screener — 60% Low Cheat · 80% Mid Cheat · Handle Pivot · 100% Breakout <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to plot Cup, Handle &amp; Levels)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="scanner-modal">⇥ Dock</button><button id="close-scanner-btn" class="pill-btn">✕ Close</button></div>
+      </div>
+
+      <div class="scanner-controls">
+        <div class="scanner-row">
+          <span style="font-size:12px; color:var(--text-muted);">Index Basket:</span>
+          <select id="scan-preset-select" class="pill-btn">
+            <option value="nifty50">Nifty 50</option>
+            <option value="nifty100">Nifty 100</option>
+            <option value="nifty_midcap">Nifty Midcap (150)</option>
+            <option value="nifty_smallcap">Nifty Smallcap (250)</option>
+            <option value="nifty500">Nifty 500</option>
+            <option value="nifty750" selected>Nifty 750 (Total Market)</option>
+            <option value="all">All NSE Stocks (2,200+)</option>
+            <option value="watchlist">Pharma &amp; Watchlist (25 Stocks)</option>
+          </select>
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">Timeframe:</span>
+          <select id="scan-tf-select" class="pill-btn">
+            <option value="1d" selected>Daily (D)</option>
+            <option value="1wk">Weekly (W)</option>
+          </select>
+
+          <button class="run-scan-btn" id="run-scan-btn">▶ Scan Cup &amp; Handle</button>
+          <span id="scan-status" style="font-size:11px; color:var(--text-muted); margin-left:auto;"></span>
+        </div>
+
+        <textarea id="scan-symbols-input" class="scanner-textarea"></textarea>
+      </div>
+
+      <div class="scanner-filter-bar">
+        <input type="text" id="ch-filter-symbol" class="filter-input" style="width:140px;" placeholder="Filter Symbol..." />
+        <select id="ch-filter-status" class="pill-btn">
+          <option value="ALL">All Stages (60% / 80% / 100%)</option>
+          <option value="LOW CHEAT (60%)">LOW CHEAT (60%)</option>
+          <option value="MID CHEAT (80%)">MID CHEAT (80%)</option>
+          <option value="BREAKOUT (100%)">BREAKOUT (100%)</option>
+        </select>
+        <input type="number" id="ch-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0" placeholder="Min Rel Vol (1.2)" />
+        <button id="ch-reset-filters" class="pill-btn">Reset Filters</button>
+        <button id="ch-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
+      </div>
+
+      <div class="scanner-table-wrap">
+        <table class="scan-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Cup Stage</th>
+              <th>Cup %</th>
+              <th>CMP (₹)</th>
+              <th>Low Cheat (60%)</th>
+              <th>Mid Cheat (80%)</th>
+              <th>Handle Pivot</th>
+              <th>Breakout (100%)</th>
+              <th>Handle Low / SL</th>
+              <th>Target (₹)</th>
+              <th>Base</th>
+              <th>Rel Vol</th>
+            </tr>
+          </thead>
+          <tbody id="scan-results-body">
+            <tr>
+              <td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">
+                Select an Index Basket above and click <b>Scan Cup &amp; Handle</b>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="scanner-pagination">
+        <span id="ch-page-info">Showing 0 of 0 setups</span>
+        <div class="page-controls">
+          <span>Rows:</span>
+          <select id="ch-page-size" class="pill-btn">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button id="ch-prev-page" class="pill-btn" disabled>◀ Prev</button>
+          <span id="ch-page-num">Page 1 of 1</span>
+          <button id="ch-next-page" class="pill-btn" disabled>Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Multi-Year Breakout Scanner Modal -->
+  <div class="scanner-backdrop" id="myb-scanner-modal">
+    <div class="scanner-modal" style="width: 1180px;">
+      <div class="scanner-header">
+        <h3>🚀 Multi-Year Breakout (MYB) Screener <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart &amp; Multi-Year Ceiling)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="myb-scanner-modal">⇥ Dock</button><button id="close-myb-scanner-btn" class="pill-btn">✕ Close</button></div>
+      </div>
+
+      <div class="scanner-controls">
+        <div class="scanner-row">
+          <span style="font-size:12px; color:var(--text-muted);">Index Basket:</span>
+          <select id="myb-preset-select" class="pill-btn">
+            <option value="nifty50">Nifty 50</option>
+            <option value="nifty100">Nifty 100</option>
+            <option value="nifty_midcap">Nifty Midcap (150)</option>
+            <option value="nifty_smallcap">Nifty Smallcap (250)</option>
+            <option value="nifty500">Nifty 500</option>
+            <option value="nifty750" selected>Nifty 750 (Total Market)</option>
+            <option value="all">All NSE Stocks (2,200+)</option>
+            <option value="watchlist">Pharma &amp; Watchlist (25 Stocks)</option>
+          </select>
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">Lookback Horizon:</span>
+          <select id="myb-years-select" class="pill-btn">
+            <option value="2">2-Year Breakout</option>
+            <option value="3" selected>3-Year Breakout</option>
+            <option value="5">5-Year Breakout</option>
+            <option value="0">All-Time High (ATH)</option>
+          </select>
+
+          <button class="run-scan-btn" id="run-myb-scan-btn">▶ Scan Multi-Year Breakouts</button>
+          <span id="myb-scan-status" style="font-size:11px; color:var(--text-muted); margin-left:auto;"></span>
+        </div>
+
+        <textarea id="myb-symbols-input" class="scanner-textarea"></textarea>
+      </div>
+
+      <div class="scanner-filter-bar">
+        <input type="text" id="myb-filter-symbol" class="filter-input" style="width:140px;" placeholder="Filter Symbol..." />
+        <select id="myb-filter-status" class="pill-btn">
+          <option value="ALL">All Stages</option>
+          <option value="BREAKOUT">BREAKOUT</option>
+          <option value="RETEST">RETEST</option>
+          <option value="NEAR BREAKOUT">NEAR BREAKOUT</option>
+        </select>
+        <input type="number" id="myb-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0" placeholder="Min Rel Vol (1.2)" />
+        <button id="myb-reset-filters" class="pill-btn">Reset Filters</button>
+        <button id="myb-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
+      </div>
+
+      <div class="scanner-table-wrap">
+        <table class="scan-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Status</th>
+              <th>Horizon</th>
+              <th>CMP (₹)</th>
+              <th>MYB Ceiling (₹)</th>
+              <th>From Ceiling</th>
+              <th>Prior Peak Date</th>
+              <th>Base Age</th>
+              <th>Base Depth</th>
+              <th>Stop-Loss (₹)</th>
+              <th>Target (₹)</th>
+              <th>Rel Vol</th>
+            </tr>
+          </thead>
+          <tbody id="myb-results-body">
+            <tr>
+              <td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">
+                Select an Index Basket and Lookback Horizon above, then click <b>Scan Multi-Year Breakouts</b>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="scanner-pagination">
+        <span id="myb-page-info">Showing 0 of 0 setups</span>
+        <div class="page-controls">
+          <span>Rows:</span>
+          <select id="myb-page-size" class="pill-btn">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button id="myb-prev-page" class="pill-btn" disabled>◀ Prev</button>
+          <span id="myb-page-num">Page 1 of 1</span>
+          <button id="myb-next-page" class="pill-btn" disabled>Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Weekly HL / LL & Reversal Forecast Modal -->
+  <div class="scanner-backdrop" id="hl-scanner-modal">
+    <div class="scanner-modal" style="width: 1140px;">
+      <div class="scanner-header">
+        <h3>📊 Weekly Swing Low (HL / LL) Scanner &amp; Reversal Forecast <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart &amp; trigger levels)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="hl-scanner-modal">⇥ Dock</button><button id="close-hl-scanner-btn" class="pill-btn">✕ Close</button></div>
+      </div>
+
+      <div class="scanner-controls">
+        <div class="scanner-row">
+          <span style="font-size:12px; color:var(--text-muted);">Index Basket:</span>
+          <select id="hl-preset-select" class="pill-btn">
+            <option value="nifty50">Nifty 50</option>
+            <option value="nifty100">Nifty 100</option>
+            <option value="nifty_midcap">Nifty Midcap (150)</option>
+            <option value="nifty_smallcap">Nifty Smallcap (250)</option>
+            <option value="nifty500">Nifty 500</option>
+            <option value="nifty750" selected>Nifty 750 (Total Market)</option>
+            <option value="all">All NSE Stocks (2,200+)</option>
+            <option value="watchlist">Pharma &amp; Watchlist (25 Stocks)</option>
+          </select>
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">Structure:</span>
+          <select id="hl-filter-select" class="pill-btn">
+            <option value="ALL" selected>All Swing Lows (HL &amp; LL)</option>
+            <option value="HL">Higher Lows Only (HL)</option>
+            <option value="LL">Lower Lows Only (LL)</option>
+          </select>
+
+          <button class="run-scan-btn" id="run-hl-scan-btn">▶ Scan Weekly Structure</button>
+          <span id="hl-scan-status" style="font-size:11px; color:var(--text-muted); margin-left:auto;"></span>
+        </div>
+
+        <textarea id="hl-symbols-input" class="scanner-textarea"></textarea>
+      </div>
+
+      <div class="scanner-filter-bar">
+        <input type="text" id="hl-filter-symbol" class="filter-input" style="width:150px;" placeholder="Filter Symbol..." />
+        <select id="hl-filter-swing" class="pill-btn">
+          <option value="ALL">All Swings (HL &amp; LL)</option>
+          <option value="HL">HL Only</option>
+          <option value="LL">LL Only</option>
+        </select>
+        <select id="hl-filter-forecast" class="pill-btn">
+          <option value="ALL">All Forecasts</option>
+          <option value="BULLISH REVERSAL">BULLISH REVERSAL</option>
+          <option value="EARLY REVERSAL WATCH">EARLY REVERSAL WATCH</option>
+          <option value="WEAK / INDECISIVE">WEAK / INDECISIVE</option>
+          <option value="FURTHER SLIDE LIKELY">FURTHER SLIDE LIKELY</option>
+        </select>
+        <button id="hl-reset-filters" class="pill-btn">Reset Filters</button>
+        <button id="hl-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
+      </div>
+
+      <div class="scanner-table-wrap">
+        <table class="scan-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Swing</th>
+              <th>Forecast</th>
+              <th>CMP (₹)</th>
+              <th>Swing Low</th>
+              <th>30W SMA</th>
+              <th>14W RSI</th>
+              <th>Reversal Trigger</th>
+              <th>Slide SL</th>
+              <th>Technical Drivers</th>
+            </tr>
+          </thead>
+          <tbody id="hl-results-body">
+            <tr>
+              <td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">
+                Select an Index Basket above and click <b>Scan Weekly Structure</b>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="scanner-pagination">
+        <span id="hl-page-info">Showing 0 of 0 setups</span>
+        <div class="page-controls">
+          <span>Rows:</span>
+          <select id="hl-page-size" class="pill-btn">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button id="hl-prev-page" class="pill-btn" disabled>◀ Prev</button>
+          <span id="hl-page-num">Page 1 of 1</span>
+          <button id="hl-next-page" class="pill-btn" disabled>Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // DOCKED SCANNER LAYOUT (scanner panel on the right, chart resizes beside it)
+    // =========================================================================
+    const SCANNER_MODAL_IDS = ["scanner-modal", "myb-scanner-modal", "hl-scanner-modal"];
+    const SCANNER_TYPE_TO_MODAL = { CH: "scanner-modal", MYB: "myb-scanner-modal", HL_LL: "hl-scanner-modal" };
+    const dockResizer = document.getElementById("dock-resizer");
+    const DOCK_MIN_W = 340;
+    const SIDEBAR_W = 280;
+    const CHART_MIN_W = 320;
+
+    let dockedModal = null;
+    let sidebarIsOpen = false;
+    let preferredDockW = 560;
+    let selectedScanSymbol = null;
+
+    try {
+      const saved = parseInt(localStorage.getItem("scannerDockW"), 10);
+      if (saved >= DOCK_MIN_W) preferredDockW = saved;
+    } catch (e) {}
+
+    function effectiveDockW() {
+      if (!dockedModal) return 0;
+      const side = sidebarIsOpen ? SIDEBAR_W : 0;
+      const maxW = Math.max(DOCK_MIN_W, window.innerWidth - 44 - CHART_MIN_W - side);
+      return Math.min(Math.max(preferredDockW, DOCK_MIN_W), maxW);
+    }
+
+    function applyLayout() {
+      const root = document.documentElement.style;
+      root.setProperty("--dock-w", effectiveDockW() + "px");
+      root.setProperty("--side-w", (sidebarIsOpen ? SIDEBAR_W : 0) + "px");
+      dockResizer.style.display = dockedModal ? "block" : "none";
+    }
+    window.addEventListener("resize", applyLayout);
+
+    function scannerModals() {
+      return SCANNER_MODAL_IDS.map(id => document.getElementById(id));
+    }
+
+    function refreshDockButtons() {
+      document.querySelectorAll(".dock-toggle-btn").forEach(btn => {
+        const m = document.getElementById(btn.dataset.modal);
+        const isDocked = m.classList.contains("docked");
+        btn.textContent = isDocked ? "⤢ Expand" : "⇥ Dock";
+        btn.title = isDocked ? "Float as a centered window" : "Dock to the right beside the chart";
+      });
+    }
+
+    function openScanner(id) {
+      scannerModals().forEach(m => { if (m.id !== id) m.classList.remove("open", "docked"); });
+      const m = document.getElementById(id);
+      m.classList.add("open");
+      m.classList.remove("docked");
+      dockedModal = null;
+      applyLayout();
+      refreshDockButtons();
+    }
+
+    function closeScanner(id) {
+      const m = document.getElementById(id);
+      m.classList.remove("open", "docked");
+      if (dockedModal === m) dockedModal = null;
+      applyLayout();
+      refreshDockButtons();
+    }
+
+    function dockScanner(id) {
+      scannerModals().forEach(m => { if (m.id !== id) m.classList.remove("open", "docked"); });
+      const m = document.getElementById(id);
+      m.classList.add("open", "docked");
+      dockedModal = m;
+      applyLayout();
+      refreshDockButtons();
+    }
+
+    function undockScanner(id) {
+      const m = document.getElementById(id);
+      m.classList.remove("docked");
+      if (dockedModal === m) dockedModal = null;
+      applyLayout();
+      refreshDockButtons();
+    }
+
+    function markSelectedRows() {
+      document.querySelectorAll("tr.scan-hit-row").forEach(tr => {
+        const sym = (tr.querySelector(".sym-link")?.textContent || "").trim().split(/\s+/)[0];
+        tr.classList.toggle("selected", !!selectedScanSymbol && sym === selectedScanSymbol);
+      });
+    }
+
+    const NIFTY_TOTAL_UNIVERSE = [
+      { symbol: "^NSEI", name: "NIFTY 50" },
+      { symbol: "^NSEBANK", name: "NIFTY BANK" },
+      { symbol: "^CNXIT", name: "NIFTY IT" },
+      { symbol: "^CNXAUTO", name: "NIFTY AUTO" },
+      { symbol: "^CNXPHARMA", name: "NIFTY PHARMA" },
+      { symbol: "^CNXFMCG", name: "NIFTY FMCG" },
+      { symbol: "^CNXMETAL", name: "NIFTY METAL" },
+      { symbol: "^CNXENERGY", name: "NIFTY ENERGY" },
+      { symbol: "^CNXREALTY", name: "NIFTY REALTY" },
+      { symbol: "^NSEMDCP50", name: "NIFTY MIDCAP 50" },
+      { symbol: "SHILPAMED.NS", name: "Shilpa Medicare Limited" },
+      { symbol: "EMCURE.NS", name: "Emcure Pharmaceuticals Limited" },
+      { symbol: "DABUR.NS", name: "Dabur India Limited" },
+      { symbol: "RELIANCE.NS", name: "Reliance Industries Limited" },
+      { symbol: "TCS.NS", name: "Tata Consultancy Services Limited" },
+      { symbol: "HDFCBANK.NS", name: "HDFC Bank Limited" },
+      { symbol: "BHARTIARTL.NS", name: "Bharti Airtel Limited" },
+      { symbol: "ICICIBANK.NS", name: "ICICI Bank Limited" },
+      { symbol: "INFY.NS", name: "Infosys Limited" },
+      { symbol: "SBIN.NS", name: "State Bank of India" },
+      { symbol: "SUNPHARMA.NS", name: "Sun Pharmaceutical Industries Limited" },
+      { symbol: "DIVISLAB.NS", name: "Divi's Laboratories Limited" },
+      { symbol: "LAURUSLABS.NS", name: "Laurus Labs Limited" },
+      { symbol: "BEL.NS", name: "Bharat Electronics Limited" },
+      { symbol: "HAL.NS", name: "Hindustan Aeronautics Limited" },
+      { symbol: "TRENT.NS", name: "Trent Limited" }
+    ];
+
+    const INDEX_BASKETS = {
+      watchlist: [
+        "SHILPAMED.NS", "EMCURE.NS", "DIVISLAB.NS", "SUNPHARMA.NS", "CIPLA.NS",
+        "LUPIN.NS", "AUROPHARMA.NS", "ZYDUSLIFE.NS", "TORNTPHARM.NS", "ALKEM.NS",
+        "BIOCON.NS", "LAURUSLABS.NS", "GLAND.NS", "GRANULES.NS", "NATCOPHARM.NS",
+        "AJANTPHARM.NS", "IPCALAB.NS", "JBCHEPHARM.NS", "ERIS.NS", "MAXHEALTH.NS",
+        "APOLLOHOSP.NS", "FORTIS.NS", "NARAYANAHL.NS", "SUVENPHAR.NS", "NEULANDLAB.NS"
+      ],
+      nifty50: [
+        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "BHARTIARTL.NS", "ICICIBANK.NS",
+        "INFY.NS", "SBIN.NS", "HINDUNILVR.NS", "ITC.NS", "LT.NS", "HCLTECH.NS",
+        "BAJFINANCE.NS", "SUNPHARMA.NS", "MARUTI.NS", "M&M.NS", "KOTAKBANK.NS",
+        "AXISBANK.NS", "ULTRACEMCO.NS", "NTPC.NS", "ONGC.NS", "TITAN.NS",
+        "ADANIENT.NS", "ADANIPORTS.NS", "POWERGRID.NS", "TATASTEEL.NS", "COALINDIA.NS",
+        "ASIANPAINT.NS", "BAJAJFINSV.NS", "BAJAJ-AUTO.NS", "WIPRO.NS", "JSWSTEEL.NS",
+        "NESTLEIND.NS", "TECHM.NS", "HINDALCO.NS", "GRASIM.NS", "SBILIFE.NS",
+        "HDFCLIFE.NS", "DRREDDY.NS", "CIPLA.NS", "EICHERMOT.NS", "BPCL.NS",
+        "BRITANNIA.NS", "APOLLOHOSP.NS", "TATACONSUM.NS", "INDUSINDBK.NS",
+        "HEROMOTOCO.NS", "BEL.NS", "TRENT.NS", "SHRIRAMFIN.NS", "JIOFIN.NS"
+      ],
+      nifty100: [],
+      nifty_midcap: [],
+      nifty_smallcap: [],
+      nifty500: [],
+      nifty750: [],
+      all: []
+    };
+
+    const BASKET_LABELS = {
+      nifty50: "Nifty 50",
+      nifty100: "Nifty 100",
+      nifty_midcap: "Nifty Midcap (150)",
+      nifty_smallcap: "Nifty Smallcap (250)",
+      nifty500: "Nifty 500",
+      nifty750: "Nifty 750 (Total Market)",
+      all: "All NSE Stocks",
+      watchlist: "Pharma & Watchlist"
+    };
+
+    const SHORT_NAMES = {
+      "Head and Shoulders": "H&S",
+      "Inverse Head and Shoulders": "Inv H&S"
+    };
+
+    function downloadExcelCSV(filename, headers, rows) {
+      const escapeCell = (val) => {
+        const str = val === null || val === undefined ? "" : String(val);
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      const csvLines = [
+        headers.map(escapeCell).join(","),
+        ...rows.map(r => r.map(escapeCell).join(","))
+      ];
+      const bom = "\uFEFF";
+      const blob = new Blob([bom + csvLines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // Custom Instant-Search Dropdown Menu for All NSE Equities
+    const symbolInput = document.getElementById("symbol-input");
+    const stockDropdownMenu = document.getElementById("stock-dropdown-menu");
+    const stockDropdownList = document.getElementById("stock-dropdown-list");
+    const stockDropdownMeta = document.getElementById("stock-dropdown-meta");
+    let filteredDropdownItems = [];
+    let highlightedIndex = -1;
+
+    function renderStockDropdown(query = "") {
+      const q = query.trim().toUpperCase();
+      if (!q) {
+        filteredDropdownItems = NIFTY_TOTAL_UNIVERSE.slice(0, 80);
+      } else {
+        const prefixMatches = [];
+        const containsMatches = [];
+        for (let i = 0; i < NIFTY_TOTAL_UNIVERSE.length; i++) {
+          const item = NIFTY_TOTAL_UNIVERSE[i];
+          const symClean = item.symbol.replace(".NS", "");
+          if (symClean.startsWith(q) || item.symbol.startsWith(q)) {
+            prefixMatches.push(item);
+          } else if (item.symbol.includes(q) || item.name.toUpperCase().includes(q)) {
+            containsMatches.push(item);
+          }
+          if (prefixMatches.length + containsMatches.length >= 100) break;
+        }
+        filteredDropdownItems = [...prefixMatches, ...containsMatches].slice(0, 80);
+      }
+
+      highlightedIndex = filteredDropdownItems.length > 0 ? 0 : -1;
+      stockDropdownMeta.textContent = q
+        ? `Showing ${filteredDropdownItems.length} matches in NSE (${NIFTY_TOTAL_UNIVERSE.length} total stocks)`
+        : `NSE Universe (${NIFTY_TOTAL_UNIVERSE.length} stocks loaded) — type to filter`;
+
+      stockDropdownList.innerHTML = "";
+      if (!filteredDropdownItems.length) {
+        stockDropdownList.innerHTML = `<div style="padding:10px; font-size:11.5px; color:var(--text-muted);">Press Enter or Go to load <b>${q}</b> directly</div>`;
+        return;
+      }
+
+      filteredDropdownItems.forEach((item, idx) => {
+        const div = document.createElement("div");
+        div.className = "stock-option-item" + (idx === highlightedIndex ? " highlighted" : "");
+        div.innerHTML = `
+          <span class="stock-option-sym">${item.symbol}</span>
+          <span class="stock-option-name">${item.name}</span>
+        `;
+        div.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          selectStockFromDropdown(item.symbol);
+        });
+        stockDropdownList.appendChild(div);
+      });
+    }
+
+    function selectStockFromDropdown(sym) {
+      symbolInput.value = sym;
+      stockDropdownMenu.classList.remove("open");
+      activeScanLevels = [];
+      activeScanSegments = [];
+      activeTrade = null;
+      updatePlanLegend();
+      currentSymbol = sym;
+      loadChartData(true);
+    }
+
+    function updateDropdownHighlight() {
+      const items = stockDropdownList.querySelectorAll(".stock-option-item");
+      items.forEach((el, idx) => {
+        el.classList.toggle("highlighted", idx === highlightedIndex);
+        if (idx === highlightedIndex) el.scrollIntoView({ block: "nearest" });
+      });
+    }
+
+    symbolInput.addEventListener("focus", () => {
+      renderStockDropdown(symbolInput.value === "^NSEI" ? "" : symbolInput.value);
+      stockDropdownMenu.classList.add("open");
+    });
+
+    symbolInput.addEventListener("input", () => {
+      renderStockDropdown(symbolInput.value);
+      stockDropdownMenu.classList.add("open");
+    });
+
+    symbolInput.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!stockDropdownMenu.classList.contains("open")) {
+          renderStockDropdown(symbolInput.value);
+          stockDropdownMenu.classList.add("open");
+        } else if (filteredDropdownItems.length > 0) {
+          highlightedIndex = (highlightedIndex + 1) % filteredDropdownItems.length;
+          updateDropdownHighlight();
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (filteredDropdownItems.length > 0) {
+          highlightedIndex = (highlightedIndex - 1 + filteredDropdownItems.length) % filteredDropdownItems.length;
+          updateDropdownHighlight();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (stockDropdownMenu.classList.contains("open") && highlightedIndex >= 0 && filteredDropdownItems[highlightedIndex]) {
+          selectStockFromDropdown(filteredDropdownItems[highlightedIndex].symbol);
+        } else {
+          triggerSymbolLoad();
+        }
+      } else if (e.key === "Escape") {
+        stockDropdownMenu.classList.remove("open");
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!document.getElementById("symbol-combo-wrap").contains(e.target)) {
+        stockDropdownMenu.classList.remove("open");
+      }
+    });
+
+    document.getElementById("clear-symbol-btn").addEventListener("click", () => {
+      symbolInput.value = "";
+      renderStockDropdown("");
+      stockDropdownMenu.classList.add("open");
+      symbolInput.focus();
+    });
+
+    function refreshBasketSelectLabels() {
+      ["scan-preset-select", "myb-preset-select", "hl-preset-select"].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        Array.from(sel.options).forEach(opt => {
+          const list = INDEX_BASKETS[opt.value] || [];
+          if (list.length > 0 && BASKET_LABELS[opt.value]) {
+            opt.textContent = `${BASKET_LABELS[opt.value]} (${list.length} stocks)`;
+          }
+        });
+      });
+    }
+
+    fetch("/api/nifty-stocks")
+      .then(r => r.json())
+      .then(liveList => {
+        if (Array.isArray(liveList) && liveList.length > 20) {
+          const merged = [...liveList, ...NIFTY_TOTAL_UNIVERSE];
+          NIFTY_TOTAL_UNIVERSE.length = 0;
+          const seen = new Set();
+          merged.forEach(item => {
+            if (!seen.has(item.symbol)) {
+              seen.add(item.symbol);
+              NIFTY_TOTAL_UNIVERSE.push(item);
+            }
+          });
+          if (stockDropdownMenu.classList.contains("open")) {
+            renderStockDropdown(symbolInput.value);
+          }
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/index-baskets")
+      .then(r => r.json())
+      .then(baskets => {
+        if (baskets && typeof baskets === "object") {
+          Object.keys(baskets).forEach(k => {
+            if (Array.isArray(baskets[k]) && baskets[k].length > 0) {
+              INDEX_BASKETS[k] = baskets[k];
+            }
+          });
+          refreshBasketSelectLabels();
+          ["scan-preset-select", "myb-preset-select", "hl-preset-select"].forEach((selId, i) => {
+            const taIds = ["scan-symbols-input", "myb-symbols-input", "hl-symbols-input"];
+            const key = document.getElementById(selId).value;
+            if (INDEX_BASKETS[key]?.length) {
+              document.getElementById(taIds[i]).value = INDEX_BASKETS[key].join(", ");
+            }
+          });
+        }
+      })
+      .catch(() => {});
+
+    const ALL_PATTERNS = [
+      "Ascending Triangle",
+      "Descending Triangle",
+      "Symmetrical Triangle",
+      "Head and Shoulders",
+      "Inverse Head and Shoulders",
+      "Bull Flag",
+      "Bear Flag",
+      "Double Top",
+      "Double Bottom",
+      "Rounding Top",
+      "Rounding Bottom",
+      "Rising Wedge",
+      "Falling Wedge",
+      "Cup and Handle"
+    ];
+
+    let currentSymbol = "^NSEI";
+    let currentTf = "1d";
+    let currentTfLabel = "D";
+    let showPatternsLayer = false;          // all indicators OFF by default
+    let chartDataCache = null;
+    let candleByTime = new Map();
+    let activeScanLevels = [];
+    let activeScanSegments = [];
+    let activeTrade = null;                 // Entry / SL / T1-T3 / TSL plan for scanner picks
+
+    const planVisibility = {
+      entry: true,
+      sl: true,
+      tsl: true,
+      t1: true,
+      t2: true,
+      t3: true
+    };
+
+    const selectedPatterns = new Set();     // no patterns selected by default
+    const patternTogglesEl = document.getElementById("pattern-toggles");
+
+    function syncPlanToggleUI() {
+      document.querySelectorAll("#plan-level-toggles input[data-plan]").forEach(inp => {
+        const key = inp.dataset.plan;
+        if (key in planVisibility) {
+          inp.checked = !!planVisibility[key];
+        }
+      });
+    }
+
+    function setAllPlanLevels(enabled) {
+      Object.keys(planVisibility).forEach(k => {
+        planVisibility[k] = enabled;
+      });
+      syncPlanToggleUI();
+      if (activeTrade) activeTrade.showTSL = planVisibility.tsl;
+      updatePlanLegend();
+      renderOverlays();
+    }
+
+    document.querySelectorAll("#plan-level-toggles input[data-plan]").forEach(inp => {
+      inp.addEventListener("change", (e) => {
+        const key = e.target.dataset.plan;
+        if (key in planVisibility) {
+          planVisibility[key] = e.target.checked;
+          if (key === "tsl" && activeTrade) {
+            activeTrade.showTSL = e.target.checked;
+          }
+          setCustomModeActive();
+          updatePlanLegend();
+          renderOverlays();
+        }
+      });
+    });
+
+    document.getElementById("plan-all").onclick = () => setAllPlanLevels(true);
+    document.getElementById("plan-none").onclick = () => setAllPlanLevels(false);
+
+    function setCustomModeActive() {
+      document.querySelectorAll("#mode-buttons button").forEach(b => {
+        b.classList.toggle("active", b.dataset.mode === "custom");
+      });
+    }
+
+    function renderPatternToggles() {
+      patternTogglesEl.innerHTML = "";
+      ALL_PATTERNS.forEach(name => {
+        const labelEl = document.createElement("label");
+        labelEl.className = "pop-item";
+        labelEl.innerHTML = `<input type="checkbox" ${selectedPatterns.has(name) ? "checked" : ""} /> <span>${name}</span>`;
+        labelEl.querySelector("input").addEventListener("change", (e) => {
+          showPatternsLayer = true;
+          if (e.target.checked) selectedPatterns.add(name);
+          else selectedPatterns.delete(name);
+          setCustomModeActive();
+          renderOverlays();
+        });
+        patternTogglesEl.appendChild(labelEl);
+      });
+    }
+    renderPatternToggles();
+
+    document.getElementById("patterns-all").onclick = () => {
+      showPatternsLayer = true;
+      ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
+      renderPatternToggles();
+      setCustomModeActive();
+      renderOverlays();
+    };
+    document.getElementById("patterns-none").onclick = () => {
+      selectedPatterns.clear();
+      renderPatternToggles();
+      setCustomModeActive();
+      renderOverlays();
+    };
+
+    document.querySelectorAll("#mode-buttons button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#mode-buttons button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const mode = btn.dataset.mode;
+
+        const chkSr = document.getElementById("chk-sr");
+        const chkSmc = document.getElementById("chk-smc");
+        const chkTl = document.getElementById("chk-tl");
+
+        if (mode === "clean") {
+          chkSr.checked = false;
+          chkSmc.checked = false;
+          chkTl.checked = false;
+          showPatternsLayer = false;
+          activeScanLevels = [];
+          activeScanSegments = [];
+          activeTrade = null;
+          setAllPlanLevels(true);
+          updatePlanLegend();
+        } else if (mode === "structure") {
+          chkSr.checked = true;
+          chkSmc.checked = true;
+          chkTl.checked = true;
+          showPatternsLayer = false;
+        } else if (mode === "patterns") {
+          chkSr.checked = false;
+          chkSmc.checked = false;
+          chkTl.checked = false;
+          showPatternsLayer = true;
+          if (selectedPatterns.size === 0) ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
+          renderPatternToggles();
+        } else if (mode === "everything") {
+          chkSr.checked = true;
+          chkSmc.checked = true;
+          chkTl.checked = true;
+          showPatternsLayer = true;
+          ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
+          renderPatternToggles();
+        }
+        renderOverlays();
+      });
+    });
+
+    // Top Bar Dropdown Popovers (Scanners & Indicators)
+    const scannersBtn = document.getElementById("scanners-btn");
+    const scannersPop = document.getElementById("scanners-popover");
+    const indBtn = document.getElementById("indicators-btn");
+    const indPop = document.getElementById("indicators-popover");
+
+    scannersBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      indPop.classList.remove("open");
+      scannersPop.classList.toggle("open");
+    });
+
+    indBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      scannersPop.classList.remove("open");
+      indPop.classList.toggle("open");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!indPop.contains(e.target) && e.target !== indBtn) {
+        indPop.classList.remove("open");
+      }
+      if (!scannersPop.contains(e.target) && e.target !== scannersBtn) {
+        scannersPop.classList.remove("open");
+      }
+    });
+
+    const rightSidebar = document.getElementById("right-sidebar");
+    const chartWrapper = document.getElementById("chart-wrapper");
+    const toggleSidebarBtn = document.getElementById("toggle-sidebar-btn");
+
+    function setSidebarOpen(open) {
+      sidebarIsOpen = open;
+      rightSidebar.classList.toggle("collapsed", !open);
+      toggleSidebarBtn.classList.toggle("active-outline", open);
+      applyLayout();
+    }
+    toggleSidebarBtn.addEventListener("click", () => {
+      setSidebarOpen(rightSidebar.classList.contains("collapsed"));
+    });
+    document.getElementById("close-sidebar-btn").addEventListener("click", () => {
+      setSidebarOpen(false);
+    });
+    setSidebarOpen(false);   // sidebar starts collapsed (no patterns by default)
+
+    const chartContainer = document.getElementById("chart-container");
+    const chart = LightweightCharts.createChart(chartContainer, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: "#0b0e14" },
+        textColor: "#d1d4dc",
+      },
+      grid: {
+        vertLines: { color: "#151a24" },
+        horzLines: { color: "#151a24" },
+      },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: "#2a2e39" },
+      timeScale: { borderColor: "#2a2e39", timeVisible: true, secondsVisible: false },
+    });
+
+    const candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+      upColor: "#22c55e",
+      downColor: "#ef4444",
+      borderVisible: false,
+      wickUpColor: "#22c55e",
+      wickDownColor: "#ef4444",
+    });
+
+    const volumeSeries = chart.addSeries(LightweightCharts.HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "volume",
+      lastValueVisible: false,
+      priceLineVisible: false,
+      visible: false,
+    });
+    chart.priceScale("volume").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+    });
+
+    const seriesMarkers = LightweightCharts.createSeriesMarkers(candleSeries, []);
+
+    function formatIndianNumber(num) {
+      if (!num && num !== 0) return "0";
+      return Number(num).toLocaleString("en-IN");
+    }
+
+    function updateLegendBar(bar) {
+      if (!bar) return;
+      const isUp = bar.close >= bar.open;
+      const color = isUp ? "#22c55e" : "#ef4444";
+      const chg = bar.changePct !== undefined ? bar.changePct : (((bar.close - bar.open) / (bar.open || 1)) * 100);
+      const chgStr = `${chg >= 0 ? "+" : ""}${Number(chg).toFixed(2)}%`;
+
+      document.getElementById("legend-ohlc").innerHTML = `
+        <span><b>O</b> <span style="color:${color}">${bar.open.toFixed(2)}</span></span>
+        <span><b>H</b> <span style="color:${color}">${bar.high.toFixed(2)}</span></span>
+        <span><b>L</b> <span style="color:${color}">${bar.low.toFixed(2)}</span></span>
+        <span><b>C</b> <span style="color:${color}">${bar.close.toFixed(2)}</span></span>
+        <span style="color:${color}">${chgStr}</span>
+        <span><b>Vol</b> <span style="color:${color}">${formatIndianNumber(bar.volume)}</span></span>
+      `;
+    }
+
+    chart.subscribeCrosshairMove((param) => {
+      if (!param || !param.time) {
+        if (chartDataCache && chartDataCache.candles.length) {
+          updateLegendBar(chartDataCache.candles[chartDataCache.candles.length - 1]);
+        }
+        return;
+      }
+      const bar = candleByTime.get(param.time);
+      if (bar) updateLegendBar(bar);
+    });
+
+    function zoomChart(factor) {
+      const timeScale = chart.timeScale();
+      const range = timeScale.getVisibleLogicalRange();
+      if (!range) return;
+      const center = (range.from + range.to) / 2;
+      const halfSpan = ((range.to - range.from) / 2) * factor;
+      if (halfSpan < 3) return;
+      timeScale.setVisibleLogicalRange({ from: center - halfSpan, to: center + halfSpan });
+    }
+
+    function panChart(direction) {
+      const timeScale = chart.timeScale();
+      const range = timeScale.getVisibleLogicalRange();
+      if (!range) return;
+      const step = Math.max(2, (range.to - range.from) * 0.2);
+      timeScale.setVisibleLogicalRange({ from: range.from + direction * step, to: range.to + direction * step });
+    }
+
+    function resetChartView() {
+      chart.timeScale().fitContent();
+      chart.priceScale("right").applyOptions({ autoScale: true });
+    }
+
+    document.getElementById("nav-zoom-out").addEventListener("click", () => zoomChart(1.3));
+    document.getElementById("nav-zoom-in").addEventListener("click", () => zoomChart(0.75));
+    document.getElementById("nav-scroll-left").addEventListener("click", () => panChart(-1));
+    document.getElementById("nav-scroll-right").addEventListener("click", () => panChart(1));
+    document.getElementById("nav-reset").addEventListener("click", resetChartView);
+
+    window.addEventListener("keydown", (e) => {
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      if (e.key === "+" || e.key === "=") zoomChart(0.75);
+      else if (e.key === "-") zoomChart(1.3);
+      else if (e.key === "ArrowLeft") panChart(-1);
+      else if (e.key === "ArrowRight") panChart(1);
+      else if (e.altKey && e.key.toLowerCase() === "r") resetChartView();
+      else if (e.key === "Escape") {
+        // Escape closes floating scanner windows only; a docked scanner stays until you press ✕
+        document.querySelectorAll(".scanner-backdrop.open:not(.docked)").forEach(m => closeScanner(m.id));
+        indPop.classList.remove("open");
+        scannersPop.classList.remove("open");
+      }
+    });
+
+    // Dynamic Viewport Support & Resistance Calculator
+    function computeDynamicSR(candles) {
+      if (!candles || candles.length < 12) return [];
+      const timeScale = chart.timeScale();
+      const logicalRange = timeScale.getVisibleLogicalRange();
+
+      let startIdx = 0;
+      let endIdx = candles.length - 1;
+      if (logicalRange) {
+        startIdx = Math.max(0, Math.floor(logicalRange.from));
+        endIdx = Math.min(candles.length - 1, Math.ceil(logicalRange.to));
+      }
+
+      const slice = candles.slice(startIdx, endIdx + 1);
+      const m = slice.length;
+      if (m < 10) return [];
+
+      const order = Math.max(3, Math.min(7, Math.floor(m / 28)));
+      const pivots = [];
+
+      for (let i = order; i < m - order; i++) {
+        let isHigh = true;
+        let isLow = true;
+        const hi = slice[i].high;
+        const lo = slice[i].low;
+        for (let k = i - order; k <= i + order; k++) {
+          if (k === i) continue;
+          if (slice[k].high > hi) isHigh = false;
+          if (slice[k].low < lo) isLow = false;
+        }
+        const recencyWeight = 1.0 + 2.5 * (i / m);
+        if (isHigh) pivots.push({ price: hi, weight: recencyWeight, idx: i });
+        if (isLow) pivots.push({ price: lo, weight: recencyWeight, idx: i });
+      }
+
+      if (!pivots.length) return [];
+
+      let atrSum = 0;
+      const atrCount = Math.min(30, m);
+      for (let i = m - atrCount; i < m; i++) {
+        atrSum += (slice[i].high - slice[i].low) / (slice[i].close || 1);
+      }
+      const tol = Math.max(0.008, Math.min(0.022, (atrSum / atrCount) * 0.75));
+
+      pivots.sort((a, b) => a.price - b.price);
+      const clusters = [];
+      let cur = [pivots[0]];
+      for (let i = 1; i < pivots.length; i++) {
+        const avg = cur.reduce((s, p) => s + p.price, 0) / cur.length;
+        if (Math.abs(pivots[i].price - avg) / avg <= tol) {
+          cur.push(pivots[i]);
+        } else {
+          clusters.push(cur);
+          cur = [pivots[i]];
+        }
+      }
+      clusters.push(cur);
+
+      const refClose = slice[m - 1].close;
+      const candidates = [];
+      clusters.forEach(c => {
+        const maxIdx = Math.max(...c.map(p => p.idx));
+        const isRecent = (m - 1 - maxIdx) <= Math.max(18, Math.floor(m * 0.22));
+        if (c.length >= 2 || isRecent) {
+          const avgPrice = c.reduce((s, p) => s + p.price, 0) / c.length;
+          let score = c.reduce((s, p) => s + p.weight, 0);
+          if (Math.abs(avgPrice - refClose) / refClose <= 0.15) score *= 1.4;
+          candidates.push({
+            price: Number(avgPrice.toFixed(2)),
+            touches: c.length,
+            type: avgPrice >= refClose ? "resistance" : "support",
+            score
+          });
+        }
+      });
+
+      const minGap = Math.max(0.018, tol * 2.2);
+      const pickSpaced = (arr, limit = 3) => {
+        arr.sort((a, b) => b.score - a.score);
+        const chosen = [];
+        for (const item of arr) {
+          if (chosen.every(c => Math.abs(item.price - c.price) / c.price >= minGap)) {
+            chosen.push(item);
+          }
+          if (chosen.length >= limit) break;
+        }
+        return chosen;
+      };
+
+      const resLevels = pickSpaced(candidates.filter(c => c.type === "resistance"), 3);
+      const supLevels = pickSpaced(candidates.filter(c => c.type === "support"), 3);
+      return [...resLevels, ...supLevels].sort((a, b) => b.price - a.price);
+    }
+
+    // =========================================================================
+    // TRADE PLAN: Entry / SL / Target 1-2-3 / Trailing Stop (Chandelier)
+    // =========================================================================
+    function buildTrade(entry, sl, scannerTarget) {
+      if (!entry || !sl || entry <= sl) return null;
+      const risk = entry - sl;
+      const t1 = entry + risk;
+      const t2 = entry + 2 * risk;
+      let t3 = entry + 3 * risk;
+      if (scannerTarget && scannerTarget > t2) t3 = scannerTarget;
+
+      const f = n => n.toFixed(2);
+      const pct = p => `${p >= entry ? "+" : ""}${(((p - entry) / entry) * 100).toFixed(1)}%`;
+      const r = p => `${((p - entry) / risk).toFixed(1)}R`;
+
+      return {
+        entry, sl, t1, t2, t3, risk,
+        showTSL: planVisibility.tsl,
+        tslNow: null,
+        levels: [
+          { planKey: "entry", price: entry, color: "#3b82f6", title: `ENTRY ${f(entry)}` },
+          { planKey: "sl",    price: sl,    color: "#ef4444", title: `SL ${f(sl)} (${pct(sl)})` },
+          { planKey: "t1",    price: t1,    color: "#86efac", title: `T1 ${f(t1)} (${pct(t1)} · ${r(t1)})` },
+          { planKey: "t2",    price: t2,    color: "#4ade80", title: `T2 ${f(t2)} (${pct(t2)} · ${r(t2)})`, excludeFromAutoScale: true },
+          { planKey: "t3",    price: t3,    color: "#22c55e", title: `T3 ${f(t3)} (${pct(t3)} · ${r(t3)})`, excludeFromAutoScale: true }
+        ]
+      };
+    }
+
+    function computeChandelierTSL(candles, atrLen = 14, hhLen = 22, mult = 3) {
+      const out = [];
+      let atr = null, tsl = null;
+      for (let i = 0; i < candles.length; i++) {
+        const c = candles[i];
+        const pc = i > 0 ? candles[i - 1].close : c.close;
+        const tr = Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc));
+        atr = atr === null ? tr : (atr * (atrLen - 1) + tr) / atrLen;
+        if (i < hhLen) continue;
+
+        let hh = -Infinity;
+        for (let k = i - hhLen + 1; k <= i; k++) hh = Math.max(hh, candles[k].high);
+        const raw = hh - mult * atr;
+
+        if (tsl === null || c.close < tsl) tsl = raw;   // start / restart after a stop-out
+        else tsl = Math.max(tsl, raw);                  // ratchet up only
+
+        out.push({ time: c.time, value: Number(tsl.toFixed(2)) });
+      }
+      return out;
+    }
+
+    function updatePlanLegend() {
+      const el = document.getElementById("legend-plan");
+      if (!el) return;
+      if (!activeTrade) { el.innerHTML = ""; return; }
+      const t = activeTrade;
+      const f = n => n.toFixed(2);
+      const parts = [];
+      if (planVisibility.entry) parts.push(`<span style="color:#3b82f6">Entry ${f(t.entry)}</span>`);
+      if (planVisibility.sl)    parts.push(`<span style="color:#ef4444">SL ${f(t.sl)}</span>`);
+      if (planVisibility.t1)    parts.push(`<span style="color:#86efac">T1 ${f(t.t1)}</span>`);
+      if (planVisibility.t2)    parts.push(`<span style="color:#4ade80">T2 ${f(t.t2)}</span>`);
+      if (planVisibility.t3)    parts.push(`<span style="color:#22c55e">T3 ${f(t.t3)}</span>`);
+      if (planVisibility.tsl)   parts.push(`<span style="color:#f59e0b">TSL ${t.tslNow ? f(t.tslNow) : "–"}</span>`);
+      if (!parts.length) {
+        el.innerHTML = `<span style="color:var(--text-muted); font-weight:400;">Trade plan levels hidden</span>`;
+        return;
+      }
+      parts.push(`<span style="color:var(--text-muted); font-weight:400;">After T1 → SL to Entry · After T2 → SL to T1 · After T3 → trail TSL</span>`);
+      el.innerHTML = parts.join("");
+    }
+
+    let activePriceLines = [];
+    let activeOverlaySeries = [];
+
+    function clearOverlays() {
+      activePriceLines.forEach(pl => candleSeries.removePriceLine(pl));
+      activePriceLines = [];
+      activeOverlaySeries.forEach(s => chart.removeSeries(s));
+      activeOverlaySeries = [];
+      seriesMarkers.setMarkers([]);
+    }
+
+    function renderOverlays() {
+      if (!chartDataCache) return;
+      clearOverlays();
+
+      const { analysis } = chartDataCache;
+      const showSR = document.getElementById("chk-sr").checked;
+      const showSMC = document.getElementById("chk-smc").checked;
+      const showTL = document.getElementById("chk-tl").checked;
+      const showVol = document.getElementById("chk-vol").checked;
+
+      volumeSeries.applyOptions({ visible: showVol });
+
+      // 0a. Plot Scanner Setup Horizontal Price Lines (respecting Entry / SL / T1-T3 visibility)
+      if (activeScanLevels && activeScanLevels.length) {
+        activeScanLevels.forEach(lvl => {
+          if (lvl.planKey && !planVisibility[lvl.planKey]) return;
+          const opts = {
+            price: lvl.price,
+            color: lvl.color,
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: lvl.title,
+          };
+          if (lvl.excludeFromAutoScale) {
+            opts.autoscaleInfoProvider = () => null;
+          }
+          const pl = candleSeries.createPriceLine(opts);
+          activePriceLines.push(pl);
+        });
+      }
+
+      // 0b. Plot Scanner Connecting Ceiling / Base Beam Segments (guarded for ascending unique times)
+      if (activeScanSegments && activeScanSegments.length) {
+        activeScanSegments.forEach(seg => {
+          if (seg.points && seg.points.length >= 2 && seg.points[0].time < seg.points[1].time) {
+            try {
+              const line = chart.addSeries(LightweightCharts.LineSeries, {
+                color: seg.color || "#22c55e",
+                lineWidth: 2,
+                lastValueVisible: false,
+                priceLineVisible: false,
+              });
+              line.setData(seg.points);
+              activeOverlaySeries.push(line);
+            } catch (e) {
+              console.warn("Skipped segment overlay:", e);
+            }
+          }
+        });
+      }
+
+      // 0c. Trailing stop (Chandelier) line for the scanner trade plan
+      if (activeTrade) {
+        activeTrade.showTSL = planVisibility.tsl;
+        const tslData = computeChandelierTSL(chartDataCache.candles);
+        if (tslData.length > 1) {
+          activeTrade.tslNow = tslData[tslData.length - 1].value;
+          if (planVisibility.tsl) {
+            const tslSeries = chart.addSeries(LightweightCharts.LineSeries, {
+              color: "#f59e0b",
+              lineWidth: 2,
+              lineStyle: LightweightCharts.LineStyle.Dotted,
+              lastValueVisible: true,
+              priceLineVisible: false,
+              title: "TSL",
+            });
+            tslSeries.setData(tslData);
+            activeOverlaySeries.push(tslSeries);
+          }
+        }
+        updatePlanLegend();
+      }
+
+      // 1. Dynamic Support & Resistance Lines
+      const srLevels = showSR ? computeDynamicSR(chartDataCache.candles) : [];
+      if (showSR && srLevels.length) {
+        srLevels.forEach(sr => {
+          const isRes = sr.type === "resistance";
+          const formattedPrice = sr.price >= 100
+            ? Math.round(sr.price).toLocaleString("en-IN")
+            : sr.price.toFixed(2);
+          const pl = candleSeries.createPriceLine({
+            price: sr.price,
+            color: isRes ? "rgba(239, 68, 68, 0.80)" : "rgba(34, 197, 94, 0.80)",
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: `${isRes ? "R" : "S"} ${formattedPrice} · ${sr.touches}x`,
+          });
+          activePriceLines.push(pl);
+        });
+      }
+
+      // 2. Swing Markers & BOS/CHoCH (labels merged into swing markers)
+      let allMarkers = [];
+      if (showSMC) {
+        const smcTag = new Map();
+        (analysis.smc_lines || []).forEach(s => smcTag.set(s.endTime, s.label));
+        (analysis.swing_markers || []).forEach(m => {
+          const tag = smcTag.get(m.time);
+          allMarkers.push(tag ? { ...m, text: `${m.text} ${tag}` } : m);
+        });
+
+        if (analysis.smc_lines) {
+          analysis.smc_lines.forEach(smc => {
+            const line = chart.addSeries(LightweightCharts.LineSeries, {
+              color: smc.color,
+              lineWidth: 1,
+              lineStyle: LightweightCharts.LineStyle.Dotted,
+              lastValueVisible: false,
+              priceLineVisible: false,
+            });
+            line.setData([
+              { time: smc.startTime, value: smc.price },
+              { time: smc.endTime, value: smc.price }
+            ]);
+            activeOverlaySeries.push(line);
+          });
+        }
+      }
+
+      // 3. Auto Trendlines
+      if (showTL && analysis.trendlines) {
+        analysis.trendlines.forEach(tl => {
+          const line = chart.addSeries(LightweightCharts.LineSeries, {
+            color: tl.side === "resistance" ? "#f97316" : "#38bdf8",
+            lineWidth: 2,
+            lastValueVisible: false,
+            priceLineVisible: false,
+          });
+          line.setData(tl.points);
+          activeOverlaySeries.push(line);
+        });
+      }
+
+      // 4. Chart Patterns
+      let visiblePatterns = showPatternsLayer
+        ? (analysis.patterns || []).filter(p => selectedPatterns.has(p.name))
+        : [];
+
+      // Cup & Handle: show only the most recent one (latest end bar; longest base wins a tie)
+      if (document.getElementById("chk-cup-latest").checked) {
+        const cups = visiblePatterns.filter(p => p.name === "Cup and Handle");
+        if (cups.length > 1) {
+          const latest = cups.reduce((a, b) => {
+            if (b.endTime !== a.endTime) return b.endTime > a.endTime ? b : a;
+            return (b.endTime - b.startTime) > (a.endTime - a.startTime) ? b : a;
+          });
+          visiblePatterns = visiblePatterns.filter(p => p.name !== "Cup and Handle" || p === latest);
+        }
+      }
+
+      visiblePatterns.forEach(pat => {
+        pat.lines.forEach((segment, segIdx) => {
+          if (segment.length >= 2) {
+            let segColor = pat.color || "#22c55e";
+            if (pat.name === "Cup and Handle") {
+              if (segIdx === 0) segColor = "#14b8a6";
+              else if (segIdx === 1) segColor = "#f97316";
+              else if (segIdx === 2) segColor = "#a855f7";
+              else if (segIdx === 3) segColor = "#22c55e";
+            }
+            const line = chart.addSeries(LightweightCharts.LineSeries, {
+              color: segColor,
+              lineWidth: 2,
+              lastValueVisible: false,
+              priceLineVisible: false,
+            });
+            line.setData(segment);
+            activeOverlaySeries.push(line);
+          }
+        });
+
+        const stageBadge = pat.meta && pat.meta.stage ? ` (${pat.meta.stage})` : "";
+        const shortLabel = (SHORT_NAMES[pat.name] || pat.name) + stageBadge;
+        allMarkers.push({
+          time: pat.endTime,
+          position: pat.direction === "bullish" ? "belowBar" : "aboveBar",
+          color: pat.color || "#22c55e",
+          shape: pat.direction === "bullish" ? "arrowUp" : "arrowDown",
+          text: shortLabel
+        });
+      });
+
+      allMarkers.sort((a, b) => a.time - b.time);
+      seriesMarkers.setMarkers(allMarkers);
+
+      toggleSidebarBtn.textContent = `Patterns (${visiblePatterns.length})`;
+      const historyEl = document.getElementById("pattern-history-list");
+      historyEl.innerHTML = "";
+
+      if (!visiblePatterns.length) {
+        historyEl.innerHTML = `<div style="padding:18px 12px; font-size:12px; color:var(--text-muted); text-align:center;">No patterns visible for current filter.</div>`;
+        return;
+      }
+
+      visiblePatterns.forEach(pat => {
+        const stageBadge = pat.meta && pat.meta.stage ? ` · ${pat.meta.stage}` : "";
+        const displayTitle = (SHORT_NAMES[pat.name] || pat.name) + stageBadge;
+        const row = document.createElement("div");
+        row.className = "pattern-row";
+        row.innerHTML = `
+          <div class="pattern-row-left">
+            <span class="status-dot dot-${pat.direction}"></span>
+            <div>
+              <div class="pattern-title">${displayTitle}</div>
+              <div class="pattern-dates">${pat.dateLabel}</div>
+            </div>
+          </div>
+          <span class="pattern-bias bias-${pat.direction}">${pat.direction}</span>
+        `;
+        row.onclick = () => {
+          alignChartToRange(pat.startTime, pat.endTime);
+        };
+        historyEl.appendChild(row);
+      });
+    }
+
+    function alignChartToRange(startTime, endTime) {
+      if (!chartDataCache || !chartDataCache.candles.length) return;
+      const candles = chartDataCache.candles;
+      let startIdx = 0;
+      let endIdx = candles.length - 1;
+
+      for (let i = 0; i < candles.length; i++) {
+        if (candles[i].time >= startTime) {
+          startIdx = i;
+          break;
+        }
+      }
+      for (let i = candles.length - 1; i >= 0; i--) {
+        if (candles[i].time <= endTime) {
+          endIdx = i;
+          break;
+        }
+      }
+
+      const span = Math.max(20, endIdx - startIdx);
+      const leftPad = Math.max(8, Math.round(span * 0.12));
+      const rightPad = Math.max(6, Math.round(span * 0.08));
+
+      chart.priceScale("right").applyOptions({ autoScale: true });
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, startIdx - leftPad),
+        to: endIdx + rightPad
+      });
+    }
+
+    let srDebounceTimer = null;
+    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+      if (!chartDataCache || !document.getElementById("chk-sr").checked) return;
+      clearTimeout(srDebounceTimer);
+      srDebounceTimer = setTimeout(() => {
+        renderOverlays();
+      }, 90);
+    });
+
+    async function loadChartData(fitView = true, focusRange = null) {
+      const meta = NIFTY_TOTAL_UNIVERSE.find(s => s.symbol === currentSymbol);
+      const displayName = meta ? `${currentSymbol} (${meta.name})` : currentSymbol;
+      document.getElementById("legend-title").textContent = `${displayName} · ${currentTfLabel} · yfinance`;
+
+      try {
+        const res = await fetch(`/api/chart-data?symbol=${encodeURIComponent(currentSymbol)}&tf=${currentTf}`);
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          document.getElementById("legend-ohlc").innerHTML = `<span style="color:#ef4444">${data.error || "Error loading symbol"}</span>`;
+          return;
+        }
+
+        chartDataCache = data;
+        candleByTime.clear();
+        const volData = [];
+
+        data.candles.forEach(c => {
+          candleByTime.set(c.time, c);
+          volData.push({
+            time: c.time,
+            value: c.volume,
+            color: c.close >= c.open ? "rgba(34, 197, 94, 0.25)" : "rgba(239, 68, 68, 0.25)"
+          });
+        });
+
+        candleSeries.setData(data.candles);
+        volumeSeries.setData(volData);
+
+        if (focusRange && data.candles.length) {
+          const firstBarTime = data.candles[0].time;
+          const lastBarTime = data.candles[data.candles.length - 1].time;
+
+          if (activeScanSegments && activeScanSegments.length) {
+            activeScanSegments.forEach(seg => {
+              if (seg.points && seg.points.length === 2) {
+                const targetStart = Math.max(firstBarTime, seg.points[0].time);
+                let sTime = firstBarTime;
+                for (let i = 0; i < data.candles.length; i++) {
+                  if (data.candles[i].time >= targetStart) {
+                    sTime = data.candles[i].time;
+                    break;
+                  }
+                }
+                seg.points[0].time = sTime;
+                seg.points[1].time = lastBarTime;
+              }
+            });
+          }
+
+          renderOverlays();
+          alignChartToRange(focusRange.startTime, focusRange.endTime);
+          setTimeout(() => alignChartToRange(focusRange.startTime, focusRange.endTime), 210);
+        } else {
+          if (fitView) resetChartView();
+          renderOverlays();
+        }
+
+        if (data.candles.length) {
+          updateLegendBar(data.candles[data.candles.length - 1]);
+        }
+      } catch (err) {
+        document.getElementById("legend-ohlc").innerHTML = `<span style="color:#ef4444">Connection error</span>`;
+      }
+    }
+
+    function triggerSymbolLoad() {
+      let val = symbolInput.value.trim().toUpperCase();
+      if (!val) return;
+      if (!val.startsWith("^") && !val.includes(".") && !val.includes("-")) {
+        val = `${val}.NS`;
+        symbolInput.value = val;
+      }
+      stockDropdownMenu.classList.remove("open");
+      activeScanLevels = [];
+      activeScanSegments = [];
+      activeTrade = null;
+      updatePlanLegend();
+      currentSymbol = val;
+      loadChartData(true);
+    }
+
+    document.getElementById("load-symbol-btn").addEventListener("click", triggerSymbolLoad);
+
+    document.querySelectorAll("#tf-buttons button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#tf-buttons button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentTf = btn.dataset.tf;
+        currentTfLabel = btn.dataset.label;
+        loadChartData(true);
+      });
+    });
+
+    ["chk-sr", "chk-smc", "chk-tl", "chk-vol", "chk-cup-latest"].forEach(id => {
+      document.getElementById(id).addEventListener("change", () => {
+        setCustomModeActive();
+        renderOverlays();
+      });
+    });
+
+    // Navigate from any Scanner directly to the Chart tailored for that Scanner
+    function openChartFromScanner(config) {
+      // Dock the scanner the click came from, so the list stays beside the chart
+      selectedScanSymbol = config.symbol;
+      dockScanner(SCANNER_TYPE_TO_MODAL[config.scannerType]);
+      markSelectedRows();
+
+      currentSymbol = config.symbol;
+      symbolInput.value = config.symbol;
+      currentTf = config.tf;
+      currentTfLabel = config.tf === "1wk" ? "W" : "D";
+
+      document.querySelectorAll("#tf-buttons button").forEach(b => {
+        b.classList.toggle("active", b.dataset.tf === currentTf);
+      });
+
+      activeScanSegments = [];
+
+      if (config.scannerType === "CH") {
+        document.getElementById("chk-sr").checked = false;
+        document.getElementById("chk-smc").checked = false;
+        document.getElementById("chk-tl").checked = false;
+        showPatternsLayer = true;
+        selectedPatterns.clear();
+        selectedPatterns.add("Cup and Handle");
+        renderPatternToggles();
+        setSidebarOpen(true);
+
+        activeScanLevels = [
+          { price: config.lowCheat, color: "#eab308", title: `LOW CHEAT 60% (${config.lowCheat.toFixed(2)})` },
+          { price: config.midCheat, color: "#14b8a6", title: `MID CHEAT 80% (${config.midCheat.toFixed(2)})` },
+          { price: config.handlePivot, color: "#a855f7", title: `HANDLE PIVOT (${config.handlePivot.toFixed(2)})` },
+          { price: config.pivot, color: "#22c55e", title: `BREAKOUT 100% (${config.pivot.toFixed(2)})` },
+          { price: config.stopLoss, color: "#ef4444", title: `HANDLE SL (${config.stopLoss.toFixed(2)})` }
+        ];
+      } else if (config.scannerType === "MYB") {
+        document.getElementById("chk-sr").checked = false;
+        document.getElementById("chk-smc").checked = true;
+        document.getElementById("chk-tl").checked = false;
+        showPatternsLayer = false;
+        setSidebarOpen(false);
+
+        activeScanLevels = [
+          { price: config.mybLevel, color: "#22c55e", title: `${config.horizon} BREAKOUT CEILING (${config.mybLevel.toFixed(2)})` },
+          { price: config.stopLoss, color: "#ef4444", title: `MYB SL (${config.stopLoss.toFixed(2)})` },
+          { price: config.target, color: "#38bdf8", title: `TARGET (${config.target.toFixed(2)})`, excludeFromAutoScale: true }
+        ];
+        activeScanSegments = [
+          {
+            color: "#22c55e",
+            points: [
+              { time: config.startTime, value: config.mybLevel },
+              { time: config.endTime, value: config.mybLevel }
+            ]
+          }
+        ];
+      } else if (config.scannerType === "HL_LL") {
+        document.getElementById("chk-sr").checked = true;
+        document.getElementById("chk-smc").checked = true;
+        document.getElementById("chk-tl").checked = true;
+        showPatternsLayer = false;
+        setSidebarOpen(false);
+
+        activeScanLevels = [
+          { price: config.triggerLevel, color: "#22c55e", title: `REVERSAL TRIGGER (${config.triggerLevel.toFixed(2)})` },
+          { price: config.stopLoss, color: "#ef4444", title: `SLIDE SL (${config.stopLoss.toFixed(2)})` }
+        ];
+      }
+
+      // Build Entry / SL / T1-T3 / TSL plan; it replaces the scanner's single SL / TARGET lines
+      const trade = buildTrade(config.entry, config.stopLoss, config.target);
+      activeTrade = trade;
+      if (trade) {
+        activeScanLevels = activeScanLevels.filter(l => !/\bSL\b|TARGET/.test(l.title));
+        activeScanLevels.push(...trade.levels);
+      }
+      updatePlanLegend();
+
+      setCustomModeActive();
+      loadChartData(false, { startTime: config.startTime, endTime: config.endTime });
+    }
+
+    // =========================================================================
+    // 1. CUP & HANDLE SCREENER
+    // =========================================================================
+    const scannerModal = document.getElementById("scanner-modal");
+    const scanPresetSelect = document.getElementById("scan-preset-select");
+    const scanSymbolsInput = document.getElementById("scan-symbols-input");
+    const runScanBtn = document.getElementById("run-scan-btn");
+    const scanStatusEl = document.getElementById("scan-status");
+    const scanResultsBody = document.getElementById("scan-results-body");
+
+    let chRawResults = [];
+    let chFilteredResults = [];
+    let chCurrentPage = 1;
+    let chLastTimeframe = "1d";
+
+    scanSymbolsInput.value = INDEX_BASKETS.nifty50.join(", ");
+    scanPresetSelect.addEventListener("change", (e) => {
+      scanSymbolsInput.value = (INDEX_BASKETS[e.target.value] || []).join(", ");
+    });
+
+    document.getElementById("menu-open-ch").addEventListener("click", () => {
+      scannersPop.classList.remove("open");
+      const key = scanPresetSelect.value;
+      if (INDEX_BASKETS[key]?.length) scanSymbolsInput.value = INDEX_BASKETS[key].join(", ");
+      openScanner("scanner-modal");
+    });
+    document.getElementById("close-scanner-btn").addEventListener("click", () => closeScanner("scanner-modal"));
+    scannerModal.addEventListener("click", (e) => {
+      if (e.target === scannerModal && !scannerModal.classList.contains("docked")) closeScanner("scanner-modal");
+    });
+
+    function applyChFiltersAndRender(resetPage = true) {
+      const symFilter = document.getElementById("ch-filter-symbol").value.trim().toUpperCase();
+      const statusFilter = document.getElementById("ch-filter-status").value;
+      const minRelVol = parseFloat(document.getElementById("ch-filter-relvol").value) || 0;
+
+      chFilteredResults = chRawResults.filter(item => {
+        if (symFilter && !item.symbol.includes(symFilter)) return false;
+        if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
+        if (minRelVol > 0 && item.relVol < minRelVol) return false;
+        return true;
+      });
+
+      document.getElementById("ch-export-excel").disabled = chFilteredResults.length === 0;
+      if (resetPage) chCurrentPage = 1;
+      renderChPage();
+    }
+
+    function renderChPage() {
+      const pageSize = parseInt(document.getElementById("ch-page-size").value, 10) || 20;
+      const total = chFilteredResults.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (chCurrentPage > totalPages) chCurrentPage = totalPages;
+
+      const startIdx = (chCurrentPage - 1) * pageSize;
+      const endIdx = Math.min(startIdx + pageSize, total);
+      const pageItems = chFilteredResults.slice(startIdx, endIdx);
+
+      document.getElementById("ch-page-info").textContent = total === 0
+        ? "Showing 0 of 0 setups"
+        : `Showing ${startIdx + 1}–${endIdx} of ${total} setups`;
+      document.getElementById("ch-page-num").textContent = `Page ${chCurrentPage} of ${totalPages}`;
+      document.getElementById("ch-prev-page").disabled = chCurrentPage <= 1;
+      document.getElementById("ch-next-page").disabled = chCurrentPage >= totalPages;
+
+      if (total === 0) {
+        scanResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">No matching Cup &amp; Handle setups found.</td></tr>`;
+        return;
+      }
+
+      scanResultsBody.innerHTML = "";
+      pageItems.forEach(item => {
+        let pillClass = "pill-LOW";
+        if (item.status.includes("BREAKOUT")) pillClass = "pill-BREAKOUT";
+        else if (item.status.includes("MID CHEAT")) pillClass = "pill-MID";
+
+        const hPivot = item.handlePivot !== undefined ? item.handlePivot : item.pivot;
+        const hLow = item.handleLow !== undefined ? item.handleLow : item.stopLoss;
+
+        const tr = document.createElement("tr");
+        tr.className = "scan-hit-row";
+        tr.innerHTML = `
+          <td><span class="sym-link">${item.symbol} <span style="font-size:10px;">↗</span></span></td>
+          <td><span class="pill-status ${pillClass}">${item.status}</span></td>
+          <td><b>${item.recoveryPct}%</b></td>
+          <td>${item.cmp.toFixed(2)}</td>
+          <td style="color:#facc15;">${item.lowCheat.toFixed(2)}</td>
+          <td style="color:#2dd4bf;">${item.midCheat.toFixed(2)}</td>
+          <td style="color:#c084fc; font-weight:600;">${hPivot.toFixed(2)}</td>
+          <td style="color:#4ade80; font-weight:600;">${item.pivot.toFixed(2)}</td>
+          <td style="color:#f87171;">${hLow.toFixed(2)} / ${item.stopLoss.toFixed(2)}</td>
+          <td style="color:#4ade80;">${item.target.toFixed(2)}</td>
+          <td>${item.baseBars} bars</td>
+          <td>${item.relVol}x</td>
+        `;
+        tr.addEventListener("click", () => {
+          openChartFromScanner({
+            scannerType: "CH",
+            symbol: item.symbol,
+            tf: chLastTimeframe,
+            lowCheat: item.lowCheat,
+            midCheat: item.midCheat,
+            handlePivot: hPivot,
+            pivot: item.pivot,
+            stopLoss: item.stopLoss,
+            target: item.target,
+            entry: item.activeTrigger,
+            startTime: item.startTime,
+            endTime: item.endTime
+          });
+        });
+        scanResultsBody.appendChild(tr);
+      });
+      markSelectedRows();
+    }
+
+    document.getElementById("ch-filter-symbol").addEventListener("input", () => applyChFiltersAndRender(true));
+    document.getElementById("ch-filter-status").addEventListener("change", () => applyChFiltersAndRender(true));
+    document.getElementById("ch-filter-relvol").addEventListener("input", () => applyChFiltersAndRender(true));
+    document.getElementById("ch-reset-filters").addEventListener("click", () => {
+      document.getElementById("ch-filter-symbol").value = "";
+      document.getElementById("ch-filter-status").value = "ALL";
+      document.getElementById("ch-filter-relvol").value = "";
+      applyChFiltersAndRender(true);
+    });
+    document.getElementById("ch-page-size").addEventListener("change", () => { chCurrentPage = 1; renderChPage(); });
+    document.getElementById("ch-prev-page").addEventListener("click", () => { if (chCurrentPage > 1) { chCurrentPage--; renderChPage(); } });
+    document.getElementById("ch-next-page").addEventListener("click", () => { chCurrentPage++; renderChPage(); });
+
+    document.getElementById("ch-export-excel").addEventListener("click", () => {
+      if (!chFilteredResults.length) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const headers = ["Symbol", "Cup Stage", "Cup Recovery (%)", "CMP (INR)", "Low Cheat 60% (INR)", "Mid Cheat 80% (INR)", "Handle Pivot (INR)", "Breakout 100% (INR)", "Handle Low (INR)", "Handle SL (INR)", "Target (INR)", "Cup Depth (%)", "Base Bars", "Rel Vol", "Date Range"];
+      const rows = chFilteredResults.map(r => [
+        r.symbol, r.status, r.recoveryPct, r.cmp.toFixed(2), r.lowCheat.toFixed(2), r.midCheat.toFixed(2),
+        (r.handlePivot ?? r.pivot).toFixed(2), r.pivot.toFixed(2), (r.handleLow ?? r.stopLoss).toFixed(2),
+        r.stopLoss.toFixed(2), r.target.toFixed(2), r.depthPct, r.baseBars, r.relVol, r.dateLabel
+      ]);
+      downloadExcelCSV(`Cup_Handle_Scan_${chLastTimeframe}_${today}.csv`, headers, rows);
+    });
+
+    runScanBtn.addEventListener("click", async () => {
+      const raw = scanSymbolsInput.value.split(",").map(s => s.trim()).filter(Boolean);
+      const scanTf = document.getElementById("scan-tf-select").value;
+      if (!raw.length) return;
+
+      runScanBtn.disabled = true;
+      scanStatusEl.textContent = `Scanning ${raw.length} stocks...`;
+      scanResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:24px; color:#2dd4bf;">Scanning ${raw.length} stocks for Cup &amp; Handle setups...</td></tr>`;
+
+      try {
+        const res = await fetch("/api/scan-cup-handle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: raw, tf: scanTf })
+        });
+        if (!res.ok) {
+          scanStatusEl.textContent = `HTTP ${res.status} Error`;
+          scanResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:#ef4444; padding:20px;">Server returned HTTP ${res.status}. Restart python app.py.</td></tr>`;
+          return;
+        }
+        const data = await res.json();
+        if (data.error) { scanStatusEl.textContent = data.error; return; }
+
+        chLastTimeframe = data.timeframe;
+        chRawResults = data.results || [];
+        scanStatusEl.textContent = `Scanned ${data.scannedCount} stocks • ${data.matchesCount} cup & handle setups found (${data.scannedAt})`;
+        applyChFiltersAndRender(true);
+      } catch (err) {
+        scanStatusEl.textContent = "Scan connection error";
+      } finally {
+        runScanBtn.disabled = false;
+      }
+    });
+
+    // =========================================================================
+    // 2. MULTI-YEAR BREAKOUT (MYB) SCANNER
+    // =========================================================================
+    const mybModal = document.getElementById("myb-scanner-modal");
+    const mybPresetSelect = document.getElementById("myb-preset-select");
+    const mybSymbolsInput = document.getElementById("myb-symbols-input");
+    const runMybScanBtn = document.getElementById("run-myb-scan-btn");
+    const mybStatusEl = document.getElementById("myb-scan-status");
+    const mybResultsBody = document.getElementById("myb-results-body");
+
+    let mybRawResults = [];
+    let mybFilteredResults = [];
+    let mybCurrentPage = 1;
+
+    mybSymbolsInput.value = INDEX_BASKETS.nifty50.join(", ");
+    mybPresetSelect.addEventListener("change", (e) => {
+      mybSymbolsInput.value = (INDEX_BASKETS[e.target.value] || []).join(", ");
+    });
+
+    document.getElementById("menu-open-myb").addEventListener("click", () => {
+      scannersPop.classList.remove("open");
+      const key = mybPresetSelect.value;
+      if (INDEX_BASKETS[key]?.length) mybSymbolsInput.value = INDEX_BASKETS[key].join(", ");
+      openScanner("myb-scanner-modal");
+    });
+    document.getElementById("close-myb-scanner-btn").addEventListener("click", () => closeScanner("myb-scanner-modal"));
+    mybModal.addEventListener("click", (e) => {
+      if (e.target === mybModal && !mybModal.classList.contains("docked")) closeScanner("myb-scanner-modal");
+    });
+
+    function applyMybFiltersAndRender(resetPage = true) {
+      const symFilter = document.getElementById("myb-filter-symbol").value.trim().toUpperCase();
+      const statusFilter = document.getElementById("myb-filter-status").value;
+      const minRelVol = parseFloat(document.getElementById("myb-filter-relvol").value) || 0;
+
+      mybFilteredResults = mybRawResults.filter(item => {
+        if (symFilter && !item.symbol.includes(symFilter)) return false;
+        if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
+        if (minRelVol > 0 && item.relVol < minRelVol) return false;
+        return true;
+      });
+
+      document.getElementById("myb-export-excel").disabled = mybFilteredResults.length === 0;
+      if (resetPage) mybCurrentPage = 1;
+      renderMybPage();
+    }
+
+    function renderMybPage() {
+      const pageSize = parseInt(document.getElementById("myb-page-size").value, 10) || 20;
+      const total = mybFilteredResults.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (mybCurrentPage > totalPages) mybCurrentPage = totalPages;
+
+      const startIdx = (mybCurrentPage - 1) * pageSize;
+      const endIdx = Math.min(startIdx + pageSize, total);
+      const pageItems = mybFilteredResults.slice(startIdx, endIdx);
+
+      document.getElementById("myb-page-info").textContent = total === 0
+        ? "Showing 0 of 0 setups"
+        : `Showing ${startIdx + 1}–${endIdx} of ${total} setups`;
+      document.getElementById("myb-page-num").textContent = `Page ${mybCurrentPage} of ${totalPages}`;
+      document.getElementById("myb-prev-page").disabled = mybCurrentPage <= 1;
+      document.getElementById("myb-next-page").disabled = mybCurrentPage >= totalPages;
+
+      if (total === 0) {
+        mybResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">No matching Multi-Year Breakout setups found.</td></tr>`;
+        return;
+      }
+
+      mybResultsBody.innerHTML = "";
+      pageItems.forEach(item => {
+        let pillClass = "pill-LOW";
+        if (item.status === "BREAKOUT") pillClass = "pill-BREAKOUT";
+        else if (item.status === "RETEST") pillClass = "pill-MID";
+
+        const distColor = item.distPct >= 0 ? "#4ade80" : "#facc15";
+        const tr = document.createElement("tr");
+        tr.className = "scan-hit-row";
+        tr.title = `Click to open ${item.symbol} Weekly chart & ${item.horizon} breakout ceiling`;
+        tr.innerHTML = `
+          <td><span class="sym-link">${item.symbol} <span style="font-size:10px;">↗</span></span></td>
+          <td><span class="pill-status ${pillClass}">${item.status}</span></td>
+          <td><b>${item.horizon}</b></td>
+          <td>${item.cmp.toFixed(2)}</td>
+          <td style="color:#2dd4bf; font-weight:600;">${item.mybLevel.toFixed(2)}</td>
+          <td style="color:${distColor}; font-weight:600;">${item.distPct > 0 ? `+${item.distPct}%` : `${item.distPct}%`}</td>
+          <td>${item.peakDate}</td>
+          <td>${item.ageYears} yrs</td>
+          <td>${item.baseDepthPct}%</td>
+          <td style="color:#f87171;">${item.stopLoss.toFixed(2)}</td>
+          <td style="color:#4ade80;">${item.target.toFixed(2)}</td>
+          <td>${item.relVol}x</td>
+        `;
+        tr.addEventListener("click", () => {
+          openChartFromScanner({
+            scannerType: "MYB",
+            symbol: item.symbol,
+            tf: "1wk",
+            horizon: item.horizon,
+            mybLevel: item.mybLevel,
+            stopLoss: item.stopLoss,
+            target: item.target,
+            entry: item.status === "NEAR BREAKOUT" ? item.mybLevel : item.cmp,
+            startTime: item.startTime,
+            endTime: item.endTime
+          });
+        });
+        mybResultsBody.appendChild(tr);
+      });
+      markSelectedRows();
+    }
+
+    document.getElementById("myb-filter-symbol").addEventListener("input", () => applyMybFiltersAndRender(true));
+    document.getElementById("myb-filter-status").addEventListener("change", () => applyMybFiltersAndRender(true));
+    document.getElementById("myb-filter-relvol").addEventListener("input", () => applyMybFiltersAndRender(true));
+    document.getElementById("myb-reset-filters").addEventListener("click", () => {
+      document.getElementById("myb-filter-symbol").value = "";
+      document.getElementById("myb-filter-status").value = "ALL";
+      document.getElementById("myb-filter-relvol").value = "";
+      applyMybFiltersAndRender(true);
+    });
+    document.getElementById("myb-page-size").addEventListener("change", () => { mybCurrentPage = 1; renderMybPage(); });
+    document.getElementById("myb-prev-page").addEventListener("click", () => { if (mybCurrentPage > 1) { mybCurrentPage--; renderMybPage(); } });
+    document.getElementById("myb-next-page").addEventListener("click", () => { mybCurrentPage++; renderMybPage(); });
+
+    document.getElementById("myb-export-excel").addEventListener("click", () => {
+      if (!mybFilteredResults.length) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const headers = ["Symbol", "Status", "Horizon", "CMP (INR)", "MYB Ceiling (INR)", "From Ceiling (%)", "Prior Peak Date", "Base Age (Yrs)", "Base Depth (%)", "Stop-Loss (INR)", "Target (INR)", "Rel Vol"];
+      const rows = mybFilteredResults.map(r => [
+        r.symbol, r.status, r.horizon, r.cmp.toFixed(2), r.mybLevel.toFixed(2), r.distPct, r.peakDate, r.ageYears, r.baseDepthPct, r.stopLoss.toFixed(2), r.target.toFixed(2), r.relVol
+      ]);
+      downloadExcelCSV(`MultiYear_Breakout_Scan_${today}.csv`, headers, rows);
+    });
+
+    runMybScanBtn.addEventListener("click", async () => {
+      const raw = mybSymbolsInput.value.split(",").map(s => s.trim()).filter(Boolean);
+      const years = parseInt(document.getElementById("myb-years-select").value, 10);
+      if (!raw.length) return;
+
+      runMybScanBtn.disabled = true;
+      mybStatusEl.textContent = `Scanning ${raw.length} stocks...`;
+      mybResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:24px; color:#2dd4bf;">Scanning ${raw.length} stocks for Multi-Year Breakouts...</td></tr>`;
+
+      try {
+        const res = await fetch("/api/scan-multiyear-breakout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: raw, years })
+        });
+        if (!res.ok) {
+          mybStatusEl.textContent = `HTTP ${res.status} Error`;
+          mybResultsBody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:#ef4444; padding:20px;">Server returned HTTP ${res.status}. Restart python app.py to load /api/scan-multiyear-breakout.</td></tr>`;
+          return;
+        }
+        const data = await res.json();
+        if (data.error) { mybStatusEl.textContent = data.error; return; }
+
+        mybRawResults = data.results || [];
+        mybStatusEl.textContent = `Scanned ${data.scannedCount} stocks • ${data.matchesCount} ${data.horizon} setups found (${data.scannedAt})`;
+        applyMybFiltersAndRender(true);
+      } catch (err) {
+        mybStatusEl.textContent = "Scan connection error";
+      } finally {
+        runMybScanBtn.disabled = false;
+      }
+    });
+
+    // =========================================================================
+    // 3. WEEKLY HL / LL SCANNER
+    // =========================================================================
+    const hlModal = document.getElementById("hl-scanner-modal");
+    const hlPresetSelect = document.getElementById("hl-preset-select");
+    const hlSymbolsInput = document.getElementById("hl-symbols-input");
+    const runHlScanBtn = document.getElementById("run-hl-scan-btn");
+    const hlStatusEl = document.getElementById("hl-scan-status");
+    const hlResultsBody = document.getElementById("hl-results-body");
+
+    let hlRawResults = [];
+    let hlFilteredResults = [];
+    let hlCurrentPage = 1;
+
+    hlSymbolsInput.value = INDEX_BASKETS.nifty50.join(", ");
+    hlPresetSelect.addEventListener("change", (e) => {
+      hlSymbolsInput.value = (INDEX_BASKETS[e.target.value] || []).join(", ");
+    });
+
+    document.getElementById("menu-open-hl").addEventListener("click", () => {
+      scannersPop.classList.remove("open");
+      const key = hlPresetSelect.value;
+      if (INDEX_BASKETS[key]?.length) hlSymbolsInput.value = INDEX_BASKETS[key].join(", ");
+      openScanner("hl-scanner-modal");
+    });
+    document.getElementById("close-hl-scanner-btn").addEventListener("click", () => closeScanner("hl-scanner-modal"));
+    hlModal.addEventListener("click", (e) => {
+      if (e.target === hlModal && !hlModal.classList.contains("docked")) closeScanner("hl-scanner-modal");
+    });
+
+    function applyHlFiltersAndRender(resetPage = true) {
+      const symFilter = document.getElementById("hl-filter-symbol").value.trim().toUpperCase();
+      const swingFilter = document.getElementById("hl-filter-swing").value;
+      const forecastFilter = document.getElementById("hl-filter-forecast").value;
+
+      hlFilteredResults = hlRawResults.filter(item => {
+        if (symFilter && !item.symbol.includes(symFilter)) return false;
+        if (swingFilter !== "ALL" && item.swingType !== swingFilter) return false;
+        if (forecastFilter !== "ALL" && item.forecast !== forecastFilter) return false;
+        return true;
+      });
+
+      document.getElementById("hl-export-excel").disabled = hlFilteredResults.length === 0;
+      if (resetPage) hlCurrentPage = 1;
+      renderHlPage();
+    }
+
+    function renderHlPage() {
+      const pageSize = parseInt(document.getElementById("hl-page-size").value, 10) || 20;
+      const total = hlFilteredResults.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (hlCurrentPage > totalPages) hlCurrentPage = totalPages;
+
+      const startIdx = (hlCurrentPage - 1) * pageSize;
+      const endIdx = Math.min(startIdx + pageSize, total);
+      const pageItems = hlFilteredResults.slice(startIdx, endIdx);
+
+      document.getElementById("hl-page-info").textContent = total === 0
+        ? "Showing 0 of 0 setups"
+        : `Showing ${startIdx + 1}–${endIdx} of ${total} setups`;
+      document.getElementById("hl-page-num").textContent = `Page ${hlCurrentPage} of ${totalPages}`;
+      document.getElementById("hl-prev-page").disabled = hlCurrentPage <= 1;
+      document.getElementById("hl-next-page").disabled = hlCurrentPage >= totalPages;
+
+      if (total === 0) {
+        hlResultsBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">No matching weekly HL/LL setups found.</td></tr>`;
+        return;
+      }
+
+      hlResultsBody.innerHTML = "";
+      pageItems.forEach(item => {
+        const swingBadge = item.swingType === "HL"
+          ? `<span class="pill-status pill-BREAKOUT">HL</span>`
+          : `<span class="pill-status" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);">LL</span>`;
+
+        let forecastColor = "#facc15";
+        if (item.forecast === "BULLISH REVERSAL") forecastColor = "#4ade80";
+        else if (item.forecast === "EARLY REVERSAL WATCH") forecastColor = "#2dd4bf";
+        else if (item.forecast === "FURTHER SLIDE LIKELY") forecastColor = "#f87171";
+
+        const tr = document.createElement("tr");
+        tr.className = "scan-hit-row";
+        tr.innerHTML = `
+          <td><span class="sym-link">${item.symbol} <span style="font-size:10px;">↗</span></span></td>
+          <td>${swingBadge}</td>
+          <td style="color:${forecastColor}; font-weight:700; font-size:11px;">${item.forecast}</td>
+          <td>${item.cmp.toFixed(2)}</td>
+          <td>${item.swingLow.toFixed(2)} <span style="font-size:10px;color:var(--text-muted);">(${item.lowDate})</span></td>
+          <td>${item.sma30.toFixed(2)}</td>
+          <td>${item.rsi14}</td>
+          <td style="color:#4ade80; font-weight:600;">${item.triggerLevel.toFixed(2)}</td>
+          <td style="color:#f87171;">${item.stopLoss.toFixed(2)}</td>
+          <td style="font-size:11px; color:var(--text-muted);">${item.summary}</td>
+        `;
+        tr.addEventListener("click", () => {
+          openChartFromScanner({
+            scannerType: "HL_LL",
+            symbol: item.symbol,
+            tf: "1wk",
+            triggerLevel: item.triggerLevel,
+            stopLoss: item.stopLoss,
+            entry: item.triggerLevel,
+            startTime: item.startTime,
+            endTime: item.endTime
+          });
+        });
+        hlResultsBody.appendChild(tr);
+      });
+      markSelectedRows();
+    }
+
+    document.getElementById("hl-filter-symbol").addEventListener("input", () => applyHlFiltersAndRender(true));
+    document.getElementById("hl-filter-swing").addEventListener("change", () => applyHlFiltersAndRender(true));
+    document.getElementById("hl-filter-forecast").addEventListener("change", () => applyHlFiltersAndRender(true));
+    document.getElementById("hl-reset-filters").addEventListener("click", () => {
+      document.getElementById("hl-filter-symbol").value = "";
+      document.getElementById("hl-filter-swing").value = "ALL";
+      document.getElementById("hl-filter-forecast").value = "ALL";
+      applyHlFiltersAndRender(true);
+    });
+    document.getElementById("hl-page-size").addEventListener("change", () => { hlCurrentPage = 1; renderHlPage(); });
+    document.getElementById("hl-prev-page").addEventListener("click", () => { if (hlCurrentPage > 1) { hlCurrentPage--; renderHlPage(); } });
+    document.getElementById("hl-next-page").addEventListener("click", () => { hlCurrentPage++; renderHlPage(); });
+
+    document.getElementById("hl-export-excel").addEventListener("click", () => {
+      if (!hlFilteredResults.length) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const headers = ["Symbol", "Swing Type", "Forecast", "Score", "CMP (INR)", "Swing Low (INR)", "Low Date", "Prior Low (INR)", "30W SMA", "14W RSI", "Rel Vol", "Reversal Trigger (INR)", "Slide Stop-Loss (INR)", "Technical Drivers"];
+      const rows = hlFilteredResults.map(r => [
+        r.symbol, r.swingType, r.forecast, r.score, r.cmp.toFixed(2), r.swingLow.toFixed(2), r.lowDate, r.prevLow.toFixed(2), r.sma30.toFixed(2), r.rsi14, r.relVol, r.triggerLevel.toFixed(2), r.stopLoss.toFixed(2), r.summary
+      ]);
+      downloadExcelCSV(`Weekly_HL_LL_Forecast_${today}.csv`, headers, rows);
+    });
+
+    runHlScanBtn.addEventListener("click", async () => {
+      const raw = hlSymbolsInput.value.split(",").map(s => s.trim()).filter(Boolean);
+      const filterType = document.getElementById("hl-filter-select").value;
+      if (!raw.length) return;
+
+      runHlScanBtn.disabled = true;
+      hlStatusEl.textContent = `Scanning ${raw.length} stocks on Weekly (1W)...`;
+      hlResultsBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:24px; color:#2dd4bf;">Analyzing weekly swing lows, 30W SMA &amp; RSI divergence across ${raw.length} stocks...</td></tr>`;
+
+      try {
+        const res = await fetch("/api/scan-weekly-structure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: raw, filter: filterType })
+        });
+        if (!res.ok) {
+          hlStatusEl.textContent = `HTTP ${res.status} Error`;
+          hlResultsBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#ef4444; padding:20px;">Server returned HTTP ${res.status}. Restart python app.py to load /api/scan-weekly-structure.</td></tr>`;
+          return;
+        }
+        const data = await res.json();
+        if (data.error) { hlStatusEl.textContent = data.error; return; }
+
+        hlRawResults = data.results || [];
+        hlStatusEl.textContent = `Scanned ${data.scannedCount} stocks • ${data.matchesCount} weekly setups (${data.scannedAt})`;
+        applyHlFiltersAndRender(true);
+      } catch (err) {
+        hlStatusEl.textContent = "Scan connection error";
+      } finally {
+        runHlScanBtn.disabled = false;
+      }
+    });
+
+    // Left Toolbar Manual Canvas Drawing Engine
+    const canvas = document.getElementById("draw-canvas");
+    const ctx = canvas.getContext("2d");
+    let activeTool = "cursor";
+    let drawings = [];
+    let currentDraw = null;
+    let drawingsVisible = true;
+
+    function resizeCanvas() {
+      canvas.width = chartContainer.clientWidth;
+      canvas.height = chartContainer.clientHeight;
+      redrawCanvas();
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function redrawCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!drawingsVisible) return;
+      const all = currentDraw ? [...drawings, currentDraw] : drawings;
+      all.forEach(d => {
+        ctx.strokeStyle = "#38bdf8";
+        ctx.fillStyle = "rgba(56, 189, 248, 0.14)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (d.type === "line") {
+          ctx.moveTo(d.x1, d.y1);
+          ctx.lineTo(d.x2, d.y2);
+          ctx.stroke();
+        } else if (d.type === "hline") {
+          ctx.moveTo(0, d.y1);
+          ctx.lineTo(canvas.width, d.y1);
+          ctx.stroke();
+        } else if (d.type === "box") {
+          ctx.fillRect(d.x1, d.y1, d.x2 - d.x1, d.y2 - d.y1);
+          ctx.strokeRect(d.x1, d.y1, d.x2 - d.x1, d.y2 - d.y1);
+        } else if (d.type === "fib") {
+          const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+          const xMin = Math.min(d.x1, d.x2);
+          const xMax = Math.max(d.x1, d.x2);
+          levels.forEach(lvl => {
+            const y = d.y1 + (d.y2 - d.y1) * lvl;
+            ctx.beginPath();
+            ctx.moveTo(xMin, y);
+            ctx.lineTo(xMax, y);
+            ctx.stroke();
+          });
+        } else if (d.type === "brush" && d.points && d.points.length > 1) {
+          ctx.moveTo(d.points[0].x, d.points[0].y);
+          for (let i = 1; i < d.points.length; i++) {
+            ctx.lineTo(d.points[i].x, d.points[i].y);
+          }
+          ctx.stroke();
+        }
+      });
+    }
+
+    document.querySelectorAll(".tool-btn[data-tool]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tool-btn[data-tool]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeTool = btn.dataset.tool;
+        canvas.classList.toggle("drawing-active", activeTool !== "cursor");
+      });
+    });
+
+    document.getElementById("toggle-drawings-vis").onclick = () => {
+      drawingsVisible = !drawingsVisible;
+      redrawCanvas();
+    };
+    document.getElementById("undo-drawing").onclick = () => {
+      drawings.pop();
+      redrawCanvas();
+    };
+    document.getElementById("clear-drawings").onclick = () => {
+      drawings = [];
+      redrawCanvas();
+    };
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (activeTool === "cursor") return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (activeTool === "brush") {
+        currentDraw = { type: "brush", points: [{ x, y }] };
+      } else {
+        currentDraw = { type: activeTool, x1: x, y1: y, x2: x, y2: y };
+      }
+      if (activeTool === "hline") {
+        drawings.push(currentDraw);
+        currentDraw = null;
+        redrawCanvas();
+      }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      if (!currentDraw) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (currentDraw.type === "brush") {
+        currentDraw.points.push({ x, y });
+      } else {
+        currentDraw.x2 = x;
+        currentDraw.y2 = y;
+      }
+      redrawCanvas();
+    });
+
+    canvas.addEventListener("mouseup", () => {
+      if (currentDraw) {
+        drawings.push(currentDraw);
+        currentDraw = null;
+        redrawCanvas();
+      }
+    });
+
+    // Keep the drawing canvas matched to the chart whenever the dock / sidebar resizes it
+    new ResizeObserver(() => resizeCanvas()).observe(chartContainer);
+
+    // Dock / Expand toggle buttons in each scanner header
+    document.querySelectorAll(".dock-toggle-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const m = document.getElementById(btn.dataset.modal);
+        if (m.classList.contains("docked")) undockScanner(btn.dataset.modal);
+        else dockScanner(btn.dataset.modal);
+      });
+    });
+
+    // Drag the left edge of the docked scanner to change its width
+    dockResizer.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      dockResizer.setPointerCapture(e.pointerId);
+      dockResizer.classList.add("dragging");
+      document.body.classList.add("resizing-dock");
+    });
+    dockResizer.addEventListener("pointermove", (e) => {
+      if (!dockResizer.classList.contains("dragging")) return;
+      preferredDockW = Math.max(DOCK_MIN_W, Math.round(window.innerWidth - e.clientX));
+      applyLayout();
+    });
+    function endDockDrag(e) {
+      if (!dockResizer.classList.contains("dragging")) return;
+      dockResizer.classList.remove("dragging");
+      document.body.classList.remove("resizing-dock");
+      try { dockResizer.releasePointerCapture(e.pointerId); } catch (err) {}
+      try { localStorage.setItem("scannerDockW", String(preferredDockW)); } catch (err) {}
+    }
+    dockResizer.addEventListener("pointerup", endDockDrag);
+    dockResizer.addEventListener("pointercancel", endDockDrag);
+
+    loadChartData(true);
+    setInterval(() => {
+      if (["1m", "3m", "5m", "15m", "30m", "1h"].includes(currentTf)) {
+        loadChartData(false);
+      }
+    }, 60000);
+  </script>
+</body>
+</html>
