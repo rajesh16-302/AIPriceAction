@@ -2,6 +2,9 @@ import io
 import os
 import json
 import time
+import socket
+import threading
+import webbrowser
 import urllib.request
 import urllib.parse
 import http.cookiejar
@@ -693,7 +696,25 @@ def scan_multiyear_breakout():
     except Exception as e:
         return jsonify({"error": f"Multi-year scan error: {str(e)}"}), 500
 
+def open_browser(port=5000):
+    """Wait for Flask server to bind to the port and launch the default web browser."""
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(50):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                break
+        except OSError:
+            time.sleep(0.1)
+    webbrowser.open(url)
+
+
 if __name__ == "__main__":
     get_nifty_total_stocks()
     get_index_baskets()
+
+    # Automatically open the browser on app startup
+    # Gated by WERKZEUG_RUN_MAIN so it opens once and doesn't duplicate on code reloads
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        threading.Thread(target=open_browser, args=(5000,), daemon=True).start()
+
     app.run(debug=True, host="127.0.0.1", port=5000)

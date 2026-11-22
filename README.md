@@ -1,56 +1,58 @@
-# AI Price Action & TechnoFunda Charting Terminal
+# AI Price Action & TechnoFunda Charting Terminal (Version 1.1)
 
-A self-hosted, TradingView-style interactive charting and batch-screening terminal built with **Python Flask**, **TradingView Lightweight Charts (v5.1.0)**, and **Yahoo Finance (`yfinance`)**. It automatically detects 14 classical chart patterns, Smart Money Concepts (`HH`, `HL`, `LH`, `LL`, `BOS`, `CHoCH`), dynamic viewport Support & Resistance levels, multi-touch trendlines, and runs batch screeners across the entire NSE equity universe—with **no broker API keys or paid subscriptions required**.
+A self-hosted, professional-grade, TradingView-style interactive charting and batch market screening terminal built with **Python Flask**, **TradingView Lightweight Charts (v5.1.0)**, and **Yahoo Finance (`yfinance`)**.
 
----
+The terminal features automated detection of **14 classical & modern chart patterns**, **Smart Money Concepts (SMC)** market structure (`HH`, `HL`, `LH`, `LL`, `BOS`, `CHoCH`), **dynamic viewport Support & Resistance**, **multi-touch trendlines**, **algorithmic trade planning levels**, and **high-speed batch market screeners** across the entire National Stock Exchange (NSE) of India universe (2,200+ equities & official index baskets)—**100% free, requiring zero broker API keys or paid data subscriptions**.
 
-## Table of Contents
-1. [Prerequisites](#prerequisites)
-2. [Project Folder Structure](#project-folder-structure)
-3. [Complete Setup & Run Steps](#complete-setup--run-steps)
-4. [Key Features](#key-features)
-5. [User Guide: Charting Workspace](#user-guide-charting-workspace)
-6. [User Guide: Built-In Market Scanners](#user-guide-built-in-market-scanners)
-7. [Customizing Watchlists & Detection Logic](#customizing-watchlists--detection-logic)
-8. [Troubleshooting](#troubleshooting)
+> For the comprehensive documentation, technical architecture, and user guide, see [Readme Version 1.1.md](file:///d:/Personal/PriceAction/Readme%20Version%201.1.md).
 
 ---
 
-## Prerequisites
+## Quickstart
 
-Before running this application, verify that your system meets the following requirements:
+### 1. Prerequisites
+* Python 3.10 or higher (Python 3.11, 3.12, or 3.13 recommended)
+* Google Chrome, Microsoft Edge, Brave, or Firefox
 
-1. **Operating System:** Windows 10/11, macOS, or Linux.
-2. **Python:** **Python 3.10 or higher** (Python 3.11, 3.12, or 3.13 recommended).
-   * Check your installed version:
-     ```bash
-     python --version
-     ```
-   * *Windows Note:* When installing Python from [python.org](https://www.python.org/downloads/), check **"Add Python to PATH"**.
-3. **pip (Python Package Installer):** Included with Python (`pip --version`).
-4. **Internet Connection:** Required to load TradingView Lightweight Charts scripts in the browser, fetch historical/intraday OHLCV market data from Yahoo Finance, and download the official NSE equity and index constituent CSV files.
-5. **Modern Web Browser:** Google Chrome, Microsoft Edge, Brave, Firefox, or Safari.
-6. **Required Python Libraries:**
-   * `flask` (Web server and REST API backend)
-   * `yfinance` (Historical and intraday stock/index OHLCV data)
-   * `pandas` (Dataframe normalization and timeframe resampling)
-   * `numpy` (Numerical array operations)
-   * `scipy` (Pivot extrema detection and linear regression)
-   * `curl_cffi` (Browser-impersonated HTTP session to prevent Yahoo Finance / NSE rate limits)
+### 2. Setup Virtual Environment & Dependencies
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Run the Terminal
+```bash
+python app.py
+```
+*The terminal will start and **automatically launch your default web browser** to `http://127.0.0.1:5000`.*
 
 ---
 
-## Project Folder Structure
-
-Ensure your working directory is organized as follows before starting the server:
-
-```text
-Price Action/
-├── app.py                     # Flask web server, caching, NSE CSV loader, REST API & batch scanners
-├── pattern_detector.py        # Pivot detection, dynamic S&R, SMC, 14 chart patterns & scanner engines
-├── requirements.txt           # Python package dependencies
-├── README.md                  # Complete setup & user guide
-├── nse_stocks_cache.json      # Auto-generated local cache of 2,200+ NSE symbols (created on first run)
-├── nse_baskets_cache.json     # Auto-generated local cache of NSE index baskets (created on first run)
-└── templates/
-    └── index.html             # Single-page TradingView Lightweight Charts frontend & scanner modals
+## Table of Contents in [Readme Version 1.1.md](file:///d:/Personal/PriceAction/Readme%20Version%201.1.md)
+1. Key Features & Capabilities
+2. System & Software Prerequisites
+3. Project Folder Structure
+4. Step-by-Step Installation & Quickstart
+5. Charting Workspace & User Interface
+   - Top Navigation Bar
+   - Preset View Modes
+   - Left Manual Drawing Rail
+   - Right Pattern Navigator
+   - Interactive Legend & Trade Plan Overlay
+   - Keyboard Shortcuts & Navigation
+6. Built-In Market Scanners
+   - Multi-Scale Cup & Handle Screener (60% Low Cheat, 80% Mid Cheat, 100% Breakout)
+   - Multi-Year Breakout (MYB) Scanner (2Y, 3Y, 5Y, ATH)
+   - Weekly HL / LL & Reversal Forecast Scanner
+   - Dockable Scanner Panel & Excel Export
+7. Supported Chart Patterns (14 Formations)
+8. Multi-Tier Market Data Pipeline & Architecture
+9. Configuration & Customization
+10. Troubleshooting & Frequently Asked Questions
