@@ -25,10 +25,11 @@ The terminal features automated detection of **14 classical & modern chart patte
    - [3. Weekly HL / LL & Reversal Forecast Scanner](#3-weekly-hl--ll--reversal-forecast-scanner)
    - [Dockable Scanner Panel & Excel Export](#dockable-scanner-panel--excel-export)
 7. [Supported Chart Patterns (14 Formations)](#supported-chart-patterns-14-formations)
-8. [Multi-Tier Market Data Pipeline & Architecture](#multi-tier-market-data-pipeline--architecture)
-9. [Configuration & Customization](#configuration--customization)
-10. [Troubleshooting & Frequently Asked Questions](#troubleshooting--frequently-asked-questions)
-11. [Disclaimer](#disclaimer)
+8. [Historical Backtesting Engine (`backtester.py`)](#historical-backtesting-engine-backtesterpy)
+9. [Multi-Tier Market Data Pipeline & Architecture](#multi-tier-market-data-pipeline--architecture)
+10. [Configuration & Customization](#configuration--customization)
+11. [Troubleshooting & Frequently Asked Questions](#troubleshooting--frequently-asked-questions)
+12. [Disclaimer](#disclaimer)
 
 ---
 
@@ -83,11 +84,13 @@ Organize your project directory as follows:
 Price Action/
 ├── app.py                          # Flask application server, caching engine, NSE CSV fetcher & REST APIs
 ├── pattern_detector.py             # Pivot detection, dynamic S&R, SMC structure, 14 chart patterns & scanner algorithms
+├── backtester.py                   # Event-driven historical backtesting engine with risk management & reports
 ├── requirements.txt                # Required Python packages
 ├── README.md                       # Base documentation
 ├── Readme Version 1.1.md           # Detailed user guide and architectural manual (this document)
 ├── nse_stocks_cache.json           # Auto-generated cache of 2,200+ NSE symbols (created on first run)
 ├── nse_baskets_cache.json          # Auto-generated cache of NSE index constituent lists (created on first run)
+├── backtest_results/               # Auto-generated directory containing exported trade logs (.csv)
 └── templates/
     └── index.html                  # Single-page frontend (TradingView Lightweight Charts v5.1.0 + scanner modals)
 ```
@@ -350,20 +353,63 @@ Scans Weekly (`1wk`) OHLCV data to detect multi-year structural ceiling breakout
 
 ### 3. Weekly HL / LL & Reversal Forecast Scanner
 
-Scans weekly charts to detect early trend changes, structural Higher Lows (HL) or Lower Lows (LL), and Wyckoff-style spring setups.
+Scans weekly charts to detect early institutional trend changes, structural Higher Lows (HL) or Lower Lows (LL), Stan Weinstein Stage Analysis transitions, and Wyckoff-style spring setups. Implemented in [`pattern_detector.py`](file:///d:/Personal/PriceAction/pattern_detector.py) (`evaluate_weekly_hl_ll`).
 
-#### Algorithmic Evaluation Criteria:
-* **Swing Type:** Identifies whether the latest pivot low is a Higher Low (`HL`) or Lower Low (`LL`) and calculates the percentage variance.
-* **30-Week SMA Alignment (Stan Weinstein Stage Analysis):** Checks whether the stock is trading above a rising 30-week SMA (Stage 2 Uptrend) or below a falling 30-week SMA (Stage 4 Downtrend).
-* **14-Week RSI Divergence:** Detects bullish divergence (lower price low accompanied by a higher RSI low).
-* **Wyckoff Spring Undercut & Reclaim:** Identifies setups where price briefly undercut a prior low but closed back above it.
-* **Volume Confirmation:** Measures bounce intensity and relative volume (`Rel Vol`).
+#### 1. Data & Structural Requirements:
+* **Timeframe:** Weekly (`1wk`) OHLCV candlesticks.
+* **Minimum History:** Requires at least **35 weekly bars** (`len(df) >= 35`) to ensure statistical validity of moving averages and RSI.
+* **Pivot Detection Algorithm:** Uses a 3-bar order pivot extremum search (`find_pivots(df, order=3)`) to identify clean swing highs and swing lows.
+* **Swing Low Count:** Requires at least **2 distinct swing lows** (`curr_low` and `prev_low`).
+* **Recency Filter:** The most recent swing low must have formed within the **last 10 weekly bars** (`(n - 1 - curr_low_idx) <= 10`).
 
-#### Algorithmic Forecast Classifications:
-* **🟢 BULLISH REVERSAL (Score ≥ 45):** Strong confluence of Higher Low, Stage 2 alignment, and volume bounce.
-* **🟡 EARLY REVERSAL WATCH (Score 15 to 44):** Early structural clues (e.g. RSI divergence or spring reclaim) developing.
-* **🔴 FURTHER SLIDE LIKELY (Score ≤ -30):** Persistent Lower Lows below a declining 30W SMA with weak volume.
-* **⚪ WEAK / INDECISIVE:** Mixed signals without clear directional edge.
+#### 2. Structural Swing Classification:
+* **Higher Low (HL):** `curr_low > prev_low`. Confirms the formation of an accumulation floor or higher structural base.
+* **Lower Low (LL):** `curr_low <= prev_low`. Indicates downtrend continuation unless accompanied by an exhaustion divergence or spring.
+* **Swing Variance %:** Quantifies the structural shift:
+  $$\text{Swing Diff \%} = \frac{\text{curr\_low} - \text{prev\_low}}{\text{prev\_low}} \times 100$$
+
+#### 3. Algorithmic Technical Confirmation Rules:
+* **Stan Weinstein 30-Week Stage Analysis:**
+  - Evaluates the 30-Week Simple Moving Average (`30W SMA`) and its 5-week slope (`sma30 > sma30_prev`).
+  - **Stage 2 (Markup):** Current price trades **above a rising 30W SMA** (`cmp > sma30` and `sma30_rising`).
+  - **Stage 4 (Markdown):** Current price trades **below a declining 30W SMA** (`cmp < sma30` and `not sma30_rising`).
+* **Wyckoff Spring (Undercut & Reclaim):**
+  - Triggered when price forms a Lower Low (`LL`) by dipping beneath `prev_low`, but the current close has rallied back **above the prior low** (`cmp > prev_low`).
+  - Detects institutional stop-runs and liquidity absorption traps.
+* **14-Week RSI Bullish Divergence:**
+  - Compares the 14-period weekly RSI at `curr_low` against the RSI at `prev_low`.
+  - Condition: Price makes a Lower Low (`LL`), but 14W RSI prints a Higher Low by **$\ge 2.0$ points** (`rsi_curr > rsi_prev + 2.0`), signaling seller exhaustion.
+* **Volume Confirmation & Bounce Follow-Through:**
+  - Computes Relative Volume (`Rel Vol`) against the 12-week moving average volume.
+  - Computes percentage bounce from the swing trough: $\text{Bounce \%} = \frac{\text{cmp} - \text{curr\_low}}{\text{curr\_low}} \times 100$.
+  - **Strong Volume Bounce:** $\text{Bounce \%} \ge 4.0\%$ and $\text{Rel Vol} \ge 1.15\times$.
+  - **Weak Follow-Through Penalty:** $\text{Bounce \%} < 1.5\%$.
+
+#### 4. Exact Scoring Weight Matrix:
+
+The scanner computes a composite score (ranging from $-65$ to $+145$) based on confluence factors:
+
+| Confluence Rule / Factor | Score Weight | Description & Technical Impact |
+| :--- | :---: | :--- |
+| **Higher Low (HL)** | **+35 pts** | Structural trend floor established above previous support |
+| **Lower Low (LL)** | **-25 pts** | Structural breakdown below previous pivot low |
+| **Wyckoff Spring Reclaim** | **+35 pts** | Price undercut prior low and closed back above it (Bear Trap) |
+| **14W RSI Bullish Divergence** | **+25 pts** | Momentum Higher Low despite Lower Low in price |
+| **Above Rising 30W SMA** | **+30 pts** | Stage 2 confirmed markup alignment |
+| **Reclaimed 30W SMA (Neutral Slope)** | **+15 pts** | Price reclaimed moving average without rising slope |
+| **Below Declining 30W SMA** | **-25 pts** | Stage 4 confirmed markdown distribution |
+| **Strong Volume Bounce** | **+20 pts** | Bounce $\ge 4.0\%$ with Relative Volume $\ge 1.15\times$ |
+| **Weak Bounce Follow-Through** | **-15 pts** | Bounce $< 1.5\%$ near swing trough |
+
+#### 5. Algorithmic Forecast Classifications:
+* **🟢 BULLISH REVERSAL (Score $\ge$ 45):** Strong confluence of Higher Low / Spring reclaim, Stage 2 moving average, and volume expansion. *Directly triggers long entries in the Strategy Backtester.*
+* **🟡 EARLY REVERSAL WATCH (Score 15 to 44):** Early structural reversal signals (such as RSI divergence or baseline reclaim) developing.
+* **🔴 FURTHER SLIDE LIKELY (Score $\le$ -30):** Persistent lower lows trapped beneath a declining 30W SMA.
+* **⚪ WEAK / INDECISIVE (Score -29 to 14):** Mixed or conflicting technical evidence.
+
+#### 6. Actionable Output Levels:
+* **Breakout Trigger Level:** Highest weekly high reached between the two swing lows or since the current low ($\max(\text{recent\_high}, \text{intervening\_high})$).
+* **Invalidation Stop Loss:** Placed $1.5\%$ below the current swing low ($\text{curr\_low} \times 0.985$).
 
 ---
 
@@ -400,6 +446,64 @@ The terminal contains a built-in algorithmic pattern detector in `pattern_detect
 | **Rounding Bottom** | Bullish | 2nd-degree polynomial curve fit ($R^2 > 0.72$) showing parabolic saucer accumulation | `#3b82f6` (Blue) |
 | **Rounding Top** | Bearish | 2nd-degree polynomial curve fit ($R^2 > 0.72$) showing parabolic dome distribution | `#ec4899` (Pink) |
 | **Cup and Handle** | Bullish | Multi-scale U-shaped cup base + tight handle shelf with 60%, 80%, and 100% pivot levels | Stage-colored |
+
+---
+
+## Strategy Backtesting (Web UI & Engine)
+
+The terminal provides both an **interactive Web UI** inside the charting workspace and a standalone CLI engine in **`backtester.py`** to historically validate all automated patterns, cheat breakouts, and reversal setups with **zero lookahead bias**.
+
+### 1. Interactive Web Backtesting UI
+
+You can run, visualize, and analyze backtests directly inside your browser without touching the command line:
+
+1. Click **🧪 Backtest** in the top bar (or select **Scanners ▾ → 🧪 Strategy Backtester**).
+2. Configure your parameters:
+   * **Strategy:** Choose *Cup & Handle*, *Multi-Year Breakout*, *Weekly Reversal*, *14 Classical Patterns*, or *All Combined*.
+   * **Index Basket:** Choose *Nifty 50*, *Nifty 100*, *Nifty Midcap*, *Nifty 500*, *Pharma & Watchlist*, or *Current Chart Symbol*.
+   * **Timeframe & Period:** Select Daily (`1D`) or Weekly (`1W`) over 1, 2, 3, or 5 years.
+   * **Capital & Risk:** Customize starting capital (₹), risk per trade (%), max simultaneous positions, and friction (%).
+3. Click **▶ Run Backtest**.
+4. **Interactive Results & Visual Review:**
+   * **KPI Dashboard Cards:** Instantly view Net Profit (₹ and %), Win Rate (%), Profit Factor, Max Drawdown (%), Trade Expectancy (R), and Sharpe Ratio.
+   * **Click-to-Chart Inspection:** Click any row in the trade results table to load that stock on the main chart and visually inspect entry, stop loss, and exit candles.
+   * **Dockable Split View:** Click **⇥ Dock** to dock the backtesting panel to the right side of the screen with a draggable resize handle.
+   * **Filter & Search:** Filter trades by symbol ticker, outcome (Wins vs. Losses), or exit reason (`TARGET_2`, `STOP_LOSS`, `TIME_STOP`).
+   * **📥 Export Excel:** One-click download of the complete backtest trade log into formatted `.csv` / `.xlsx`.
+
+---
+
+### 2. Standalone CLI Backtesting Engine (`backtester.py`)
+
+### Key Backtester Capabilities:
+* **Forward Rolling Window Simulation:** Indicators and patterns are evaluated strictly on historical bars up to bar $t$, entering orders on bar $t+1$ at Open or trigger price.
+* **Risk & Position Sizing:** Calculates exact share quantities based on portfolio equity risk (e.g. 1.0% risk per trade) and maximum portfolio allocation.
+* **Dynamic Trade Management:**
+  - **Initial Hard SL:** Structural invalidation (e.g. handle low or recent swing low).
+  - **Trailing SL (TSL):** Moves to breakeven once Target 1 is hit; dynamically trails below recent swing lows.
+  - **Multi-Target Scaling:** Books 50% partial profit at Target 1, closes the remainder at Target 2.
+  - **Time-Based Exit:** Automatically terminates stale consolidations after $N$ bars.
+* **Realistic Market Friction:** Accounts for 0.15% round-trip exchange fees, STT, brokerage, and slippage.
+* **Automated CSV Export:** Saves complete trade-by-trade logs (`trades_<strategy>_<date>.csv`) to the `backtest_results/` directory.
+
+### Quick Backtesting Commands:
+
+```bash
+# 1. Backtest Cup & Handle breakouts on Nifty 50 over 3 years
+python backtester.py --strategy cup_handle --basket nifty50 --period 3y --timeframe 1d
+
+# 2. Backtest Multi-Year Breakouts on Weekly charts
+python backtester.py --strategy myb --basket nifty100 --period 5y --timeframe 1wk
+
+# 3. Backtest Weekly HL/LL Bullish Reversal setups
+python backtester.py --strategy weekly_reversal --basket nifty50 --period 3y --timeframe 1wk
+
+# 4. Backtest 14 classical chart patterns on specific watchlist stocks
+python backtester.py --strategy patterns --symbols RELIANCE,TCS,TATAMOTORS,HDFCBANK --period 2y --timeframe 1d
+
+# 5. Full portfolio simulation with custom capital and risk
+python backtester.py --strategy all --basket nifty50 --capital 2000000 --risk 1.5 --max-trades 6
+```
 
 ---
 

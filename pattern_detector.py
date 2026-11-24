@@ -712,8 +712,9 @@ def evaluate_weekly_hl_ll(symbol: str, df: pd.DataFrame):
 
     invalidation_sl = round(curr_low * 0.985, 2)
 
-    from datetime import datetime, timezone
-    low_date = datetime.fromtimestamp(int(times[curr_low_idx]), tz=timezone.utc).strftime("%Y-%m-%d")
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    low_date = datetime.fromtimestamp(int(times[curr_low_idx]), tz=IST).strftime("%Y-%m-%d")
 
     return {
         "symbol": symbol,
@@ -807,8 +808,9 @@ def evaluate_multiyear_breakout(symbol: str, df: pd.DataFrame, years: int = 3):
     if target_price <= cmp * 1.05:
         target_price = round(myb_level * 1.25, 2)
 
-    from datetime import datetime, timezone
-    peak_date = datetime.fromtimestamp(int(times[peak_idx]), tz=timezone.utc).strftime("%Y-%m-%d")
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    peak_date = datetime.fromtimestamp(int(times[peak_idx]), tz=IST).strftime("%Y-%m-%d")
     age_weeks = int(m - 1 - peak_idx)
     age_years = round(age_weeks / 52.0, 1)
 

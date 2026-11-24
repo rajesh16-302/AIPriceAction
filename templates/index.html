@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Price Action Terminal</title>
   <script src="https://unpkg.com/lightweight-charts@5.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    :root {
+    :root,
+    html[data-theme="dark"] {
       --bg-main: #0b0e14;
       --bg-panel: #131722;
       --bg-elevated: #1e222d;
@@ -18,11 +20,62 @@
       --teal: #14b8a6;
       --green: #22c55e;
       --red: #ef4444;
-      --dock-w: 0px;   /* width of the docked scanner panel (set from JS) */
-      --side-w: 0px;   /* width of the pattern sidebar when open (set from JS) */
+      --card-bg: #161b26;
+      --input-bg: #1e222d;
+      --modal-backdrop: rgba(0, 0, 0, 0.72);
+      --dock-w: 0px;
+      /* width of the docked scanner panel (set from JS) */
+      --side-w: 0px;
+      /* width of the pattern sidebar when open (set from JS) */
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    html, body {
+
+    html[data-theme="light"] {
+      --bg-main: #f1f5f9;
+      --bg-panel: #ffffff;
+      --bg-elevated: #e2e8f0;
+      --bg-hover: #cbd5e1;
+      --border: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --accent: #2563eb;
+      --teal: #0d9488;
+      --green: #16a34a;
+      --red: #dc2626;
+      --card-bg: #ffffff;
+      --input-bg: #f8fafc;
+      --modal-backdrop: rgba(15, 23, 42, 0.45);
+      --dock-w: 0px;
+      --side-w: 0px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      html[data-theme="system"] {
+        --bg-main: #f1f5f9;
+        --bg-panel: #ffffff;
+        --bg-elevated: #e2e8f0;
+        --bg-hover: #cbd5e1;
+        --border: #cbd5e1;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --accent: #2563eb;
+        --teal: #0d9488;
+        --green: #16a34a;
+        --red: #dc2626;
+        --card-bg: #ffffff;
+        --input-bg: #f8fafc;
+        --modal-backdrop: rgba(15, 23, 42, 0.45);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    html,
+    body {
       background: var(--bg-main);
       color: var(--text-main);
       width: 100vw;
@@ -35,7 +88,9 @@
     /* Fixed Top Bar (44px) */
     .topbar {
       position: fixed;
-      top: 0; left: 0; right: 0;
+      top: 0;
+      left: 0;
+      right: 0;
       height: 44px;
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
@@ -44,6 +99,35 @@
       padding: 0 10px;
       gap: 6px;
       z-index: 40;
+      overflow: visible;
+      white-space: nowrap;
+    }
+
+    .topbar>* {
+      flex-shrink: 0;
+    }
+
+    .tf-select-option {
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      text-align: left;
+      cursor: pointer;
+      border: 1px solid transparent;
+      color: var(--text-main);
+      width: 100%;
+      background: transparent;
+    }
+
+    .tf-select-option:hover {
+      background: var(--bg-elevated);
+      color: #38bdf8;
+    }
+
+    .tf-select-option.active {
+      background: rgba(56, 189, 248, 0.16);
+      color: #38bdf8;
+      font-weight: 700;
     }
 
     /* Custom Editable Searchable Stock Dropdown */
@@ -52,6 +136,7 @@
       display: flex;
       align-items: center;
     }
+
     .symbol-combo input {
       width: 185px;
       background: var(--bg-elevated);
@@ -64,7 +149,11 @@
       text-transform: uppercase;
       outline: none;
     }
-    .symbol-combo input:focus { border-color: var(--accent); }
+
+    .symbol-combo input:focus {
+      border-color: var(--accent);
+    }
+
     .symbol-clear-btn {
       position: absolute;
       right: 4px;
@@ -75,7 +164,11 @@
       padding: 0 4px;
       cursor: pointer;
     }
-    .symbol-clear-btn:hover { background: transparent; color: #fff; }
+
+    .symbol-clear-btn:hover {
+      background: transparent;
+      color: #fff;
+    }
 
     .stock-dropdown-menu {
       position: absolute;
@@ -92,7 +185,11 @@
       flex-direction: column;
       z-index: 80;
     }
-    .stock-dropdown-menu.open { display: flex; }
+
+    .stock-dropdown-menu.open {
+      display: flex;
+    }
+
     .stock-dropdown-meta {
       padding: 5px 10px;
       font-size: 10.5px;
@@ -102,6 +199,7 @@
       position: sticky;
       top: 0;
     }
+
     .stock-option-item {
       padding: 7px 10px;
       display: flex;
@@ -112,14 +210,18 @@
       border-bottom: 1px solid rgba(42, 46, 57, 0.45);
       font-size: 12px;
     }
-    .stock-option-item:hover, .stock-option-item.highlighted {
+
+    .stock-option-item:hover,
+    .stock-option-item.highlighted {
       background: var(--bg-elevated);
     }
+
     .stock-option-sym {
       font-weight: 700;
       color: #60a5fa;
       white-space: nowrap;
     }
+
     .stock-option-name {
       color: var(--text-muted);
       font-size: 11px;
@@ -136,12 +238,15 @@
       margin: 0 3px;
       flex-shrink: 0;
     }
+
     .btn-group {
       display: flex;
       align-items: center;
       gap: 2px;
     }
-    button, select {
+
+    button,
+    select {
       background: transparent;
       color: var(--text-main);
       border: 1px solid transparent;
@@ -153,18 +258,25 @@
       outline: none;
       white-space: nowrap;
     }
-    button:hover { background: var(--bg-elevated); color: #fff; }
+
+    button:hover {
+      background: var(--bg-elevated);
+      color: #fff;
+    }
+
     button.active {
       background: var(--accent);
       color: #ffffff;
       font-weight: 600;
     }
+
     .top-right-controls {
       margin-left: auto;
       display: flex;
       align-items: center;
       gap: 6px;
     }
+
     .pill-btn {
       background: var(--bg-elevated);
       border: 1px solid var(--border);
@@ -172,8 +284,17 @@
       border-radius: 5px;
       font-size: 12px;
     }
-    .pill-btn:hover { border-color: #434651; background: var(--bg-hover); }
-    .pill-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .pill-btn:hover {
+      border-color: #434651;
+      background: var(--bg-hover);
+    }
+
+    .pill-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
     .pill-btn.active-outline {
       border-color: var(--accent);
       background: rgba(41, 98, 255, 0.16);
@@ -181,10 +302,13 @@
     }
 
     /* Toolbar Dropdown Popovers (Scanners & Indicators) */
-    .dropdown-wrap { position: relative; }
+    .dropdown-wrap {
+      position: relative;
+    }
+
     .dropdown-popover {
       position: absolute;
-      top: 34px;
+      top: 36px;
       right: 0;
       width: 295px;
       background: var(--bg-panel);
@@ -195,9 +319,19 @@
       display: none;
       flex-direction: column;
       gap: 6px;
-      z-index: 60;
+      z-index: 100;
     }
-    .dropdown-popover.open { display: flex; }
+
+    #mode-dropdown-popover,
+    #tf-dropdown-popover {
+      left: 0;
+      right: auto;
+    }
+
+    .dropdown-popover.open {
+      display: flex;
+    }
+
     .pop-header {
       font-size: 11px;
       font-weight: 700;
@@ -209,6 +343,7 @@
       padding: 2px 4px 5px 4px;
       border-bottom: 1px solid var(--border);
     }
+
     .pop-list {
       max-height: 210px;
       overflow-y: auto;
@@ -216,11 +351,13 @@
       flex-direction: column;
       gap: 4px;
     }
+
     .pop-grid-6 {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 3px;
     }
+
     .pop-item {
       display: flex;
       align-items: center;
@@ -230,7 +367,12 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    .pop-item:hover { background: var(--bg-elevated); color: #fff; }
+
+    .pop-item:hover {
+      background: var(--bg-elevated);
+      color: #fff;
+    }
+
     .scanner-menu-item {
       display: flex;
       flex-direction: column;
@@ -243,10 +385,12 @@
       text-align: left;
       width: 100%;
     }
+
     .scanner-menu-item:hover {
       background: var(--bg-elevated);
       border-color: rgba(45, 212, 191, 0.35);
     }
+
     .scanner-menu-title {
       font-size: 12.5px;
       font-weight: 600;
@@ -255,6 +399,7 @@
       align-items: center;
       gap: 6px;
     }
+
     .scanner-menu-desc {
       font-size: 11px;
       color: var(--text-muted);
@@ -265,7 +410,9 @@
     /* Fixed Left Drawing Toolbar (44px) */
     .left-toolbar {
       position: fixed;
-      top: 44px; left: 0; bottom: 0;
+      top: 44px;
+      left: 0;
+      bottom: 0;
       width: 44px;
       background: var(--bg-panel);
       border-right: 1px solid var(--border);
@@ -276,6 +423,7 @@
       gap: 6px;
       z-index: 30;
     }
+
     .tool-btn {
       width: 32px;
       height: 32px;
@@ -288,23 +436,41 @@
       background: transparent;
       border: 1px solid transparent;
     }
-    .tool-btn:hover { background: var(--bg-elevated); color: #fff; }
+
+    .tool-btn:hover {
+      background: var(--bg-elevated);
+      color: #fff;
+    }
+
     .tool-btn.active {
       background: rgba(41, 98, 255, 0.22);
       border-color: var(--accent);
       color: #60a5fa;
     }
+
     .tool-btn svg {
-      width: 17px; height: 17px;
-      stroke: currentColor; stroke-width: 1.75;
-      fill: none; stroke-linecap: round; stroke-linejoin: round;
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
-    .tool-sep { width: 22px; height: 1px; background: var(--border); margin: 2px 0; }
+
+    .tool-sep {
+      width: 22px;
+      height: 1px;
+      background: var(--border);
+      margin: 2px 0;
+    }
 
     /* Fixed Right Sidebar: Chart patterns (280px, collapsible) */
     .right-sidebar {
       position: fixed;
-      top: 44px; right: var(--dock-w); bottom: 0;
+      top: 44px;
+      right: var(--dock-w);
+      bottom: 0;
       width: 280px;
       background: var(--bg-panel);
       border-left: 1px solid var(--border);
@@ -314,7 +480,11 @@
       z-index: 30;
       transition: transform 0.18s ease, right 0.18s ease;
     }
-    .right-sidebar.collapsed { transform: translateX(100%); }
+
+    .right-sidebar.collapsed {
+      transform: translateX(100%);
+    }
+
     .sidebar-header {
       height: 38px;
       padding: 0 12px;
@@ -327,6 +497,7 @@
       color: #e2e8f0;
       flex-shrink: 0;
     }
+
     .sidebar-close {
       background: transparent;
       border: none;
@@ -334,13 +505,19 @@
       font-size: 15px;
       padding: 2px 6px;
     }
-    .sidebar-close:hover { color: #fff; background: var(--bg-elevated); }
+
+    .sidebar-close:hover {
+      color: #fff;
+      background: var(--bg-elevated);
+    }
+
     .history-list {
       flex: 1;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
     }
+
     .pattern-row {
       display: flex;
       align-items: center;
@@ -350,23 +527,67 @@
       cursor: pointer;
       transition: background 0.12s;
     }
-    .pattern-row:hover { background: var(--bg-elevated); }
-    .pattern-row-left { display: flex; align-items: flex-start; gap: 9px; }
+
+    .pattern-row:hover {
+      background: var(--bg-elevated);
+    }
+
+    .pattern-row-left {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+    }
+
     .status-dot {
-      width: 8px; height: 8px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       margin-top: 4px;
       flex-shrink: 0;
     }
-    .dot-bullish { background: var(--green); }
-    .dot-bearish { background: var(--red); }
-    .dot-neutral { background: #eab308; }
-    .pattern-title { font-size: 12.5px; font-weight: 600; color: #e2e8f0; }
-    .pattern-dates { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
-    .pattern-bias { font-size: 11.5px; font-weight: 500; text-transform: lowercase; }
-    .bias-bullish { color: var(--green); }
-    .bias-bearish { color: var(--red); }
-    .bias-neutral { color: #eab308; }
+
+    .dot-bullish {
+      background: var(--green);
+    }
+
+    .dot-bearish {
+      background: var(--red);
+    }
+
+    .dot-neutral {
+      background: #eab308;
+    }
+
+    .pattern-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .pattern-dates {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pattern-bias {
+      font-size: 11.5px;
+      font-weight: 500;
+      text-transform: lowercase;
+    }
+
+    .bias-bullish {
+      color: var(--green);
+    }
+
+    .bias-bearish {
+      color: var(--red);
+    }
+
+    .bias-neutral {
+      color: #eab308;
+    }
 
     /* Center Chart Area */
     .chart-wrapper {
@@ -379,15 +600,36 @@
       overflow: hidden;
       transition: right 0.18s ease;
     }
-    body.resizing-dock { user-select: none; cursor: col-resize; }
-    body.resizing-dock .chart-wrapper,
-    body.resizing-dock .right-sidebar { transition: none !important; }
-    #chart-container { width: 100%; height: 100%; }
-    #draw-canvas {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 10;
+
+    body.resizing-dock {
+      user-select: none;
+      cursor: col-resize;
     }
-    #draw-canvas.drawing-active { pointer-events: auto; cursor: crosshair; }
+
+    body.resizing-dock .chart-wrapper,
+    body.resizing-dock .right-sidebar {
+      transition: none !important;
+    }
+
+    #chart-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #draw-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #draw-canvas.drawing-active {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
 
     /* Top-Left TradingView OHLCV Legend */
     .tv-legend {
@@ -400,6 +642,7 @@
       flex-direction: column;
       gap: 3px;
     }
+
     .tv-legend-title {
       font-size: 13px;
       font-weight: 600;
@@ -408,6 +651,7 @@
       align-items: center;
       gap: 6px;
     }
+
     .tv-legend-ohlc {
       font-size: 11.5px;
       color: var(--text-muted);
@@ -416,8 +660,15 @@
       flex-wrap: wrap;
       gap: 8px;
     }
-    .tv-legend-ohlc span b { font-weight: 500; color: var(--text-muted); }
-    #legend-plan { font-weight: 600; }
+
+    .tv-legend-ohlc span b {
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    #legend-plan {
+      font-weight: 600;
+    }
 
     /* Floating Bottom-Center Chart Navigation Controls */
     .chart-nav-controls {
@@ -432,24 +683,52 @@
       opacity: 0.35;
       transition: opacity 0.2s ease;
     }
+
     .chart-wrapper:hover .chart-nav-controls,
-    .chart-nav-controls:hover { opacity: 1; }
-    .nav-cluster { display: flex; align-items: center; gap: 6px; }
+    .chart-nav-controls:hover {
+      opacity: 1;
+    }
+
+    .nav-cluster {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .chart-nav-btn {
-      width: 30px; height: 30px; padding: 0; border-radius: 6px;
-      background: rgba(30, 34, 45, 0.92); border: 1px solid var(--border);
-      color: var(--text-main); display: flex; align-items: center; justify-content: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 6px;
+      background: rgba(30, 34, 45, 0.92);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
     }
-    .chart-nav-btn:hover { background: var(--bg-hover); border-color: #434651; color: #fff; }
+
+    .chart-nav-btn:hover {
+      background: var(--bg-hover);
+      border-color: #434651;
+      color: #fff;
+    }
+
     .chart-nav-btn svg {
-      width: 15px; height: 15px; stroke: currentColor; stroke-width: 2.2;
-      fill: none; stroke-linecap: round; stroke-linejoin: round;
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     /* Scanner Modals */
     .scanner-backdrop {
-      position: fixed; inset: 0;
+      position: fixed;
+      inset: 0;
       background: rgba(5, 8, 13, 0.78);
       z-index: 70;
       display: none;
@@ -457,36 +736,84 @@
       justify-content: center;
       padding: 16px;
     }
-    .scanner-backdrop.open { display: flex; }
+
+    .scanner-backdrop.open {
+      display: flex;
+    }
+
     .scanner-modal {
-      width: 1240px; max-width: 98vw; max-height: 88vh;
-      background: var(--bg-panel); border: 1px solid var(--border);
-      border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
+      width: 1240px;
+      max-width: 98vw;
+      max-height: 88vh;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
     }
+
     .scanner-header {
-      padding: 11px 16px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       background: #171c28;
     }
-    .scanner-header h3 { font-size: 14px; color: #2dd4bf; }
+
+    .scanner-header h3 {
+      font-size: 14px;
+      color: #2dd4bf;
+    }
+
     .scanner-controls {
-      padding: 10px 16px; border-bottom: 1px solid var(--border);
-      display: flex; flex-direction: column; gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .scanner-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .scanner-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .scanner-textarea {
-      width: 100%; height: 46px;
-      background: var(--bg-main); color: var(--text-main);
-      border: 1px solid var(--border); border-radius: 4px;
-      padding: 6px 10px; font-size: 11.5px; resize: vertical; outline: none; text-transform: uppercase;
+      width: 100%;
+      height: 46px;
+      background: var(--bg-main);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      resize: vertical;
+      outline: none;
+      text-transform: uppercase;
     }
+
     .run-scan-btn {
-      background: var(--teal); border-color: var(--teal);
-      color: #062825; font-weight: 700; padding: 5px 14px;
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #062825;
+      font-weight: 700;
+      padding: 5px 14px;
     }
-    .run-scan-btn:hover { background: #2dd4bf; color: #041d1b; }
-    .run-scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .run-scan-btn:hover {
+      background: #2dd4bf;
+      color: #041d1b;
+    }
+
+    .run-scan-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     /* Scanner Results Filter Bar */
     .scanner-filter-bar {
@@ -498,6 +825,7 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .filter-input {
       background: var(--bg-elevated);
       color: var(--text-main);
@@ -507,7 +835,11 @@
       font-size: 12px;
       outline: none;
     }
-    .filter-input:focus { border-color: var(--accent); }
+
+    .filter-input:focus {
+      border-color: var(--accent);
+    }
+
     .excel-btn {
       background: rgba(34, 197, 94, 0.16);
       border: 1px solid rgba(34, 197, 94, 0.45);
@@ -518,19 +850,59 @@
       font-weight: 600;
       margin-left: auto;
     }
-    .excel-btn:hover { background: rgba(34, 197, 94, 0.28); color: #fff; }
-    .excel-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .scanner-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 10px 16px; }
-    table.scan-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-    table.scan-table th {
-      position: sticky; top: 0; background: #171c28; color: var(--text-muted);
-      text-align: left; padding: 8px 8px; font-size: 10.5px; text-transform: uppercase;
-      border-bottom: 1px solid var(--border); z-index: 2; white-space: nowrap;
+    .excel-btn:hover {
+      background: rgba(34, 197, 94, 0.28);
+      color: #fff;
     }
-    table.scan-table td { padding: 8px 8px; border-bottom: 1px solid #1e222d; white-space: nowrap; }
-    table.scan-table tr.scan-hit-row { cursor: pointer; }
-    table.scan-table tr.scan-hit-row:hover { background: #1e2536; }
+
+    .excel-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .scanner-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 16px 10px 16px;
+    }
+
+    table.scan-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    table.scan-table th {
+      position: sticky;
+      top: 0;
+      background: #171c28;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 8px 8px;
+      font-size: 10.5px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      z-index: 2;
+      white-space: nowrap;
+    }
+
+    table.scan-table td {
+      padding: 8px 8px;
+      border-bottom: 1px solid #1e222d;
+      white-space: nowrap;
+    }
+
+    table.scan-table tr.scan-hit-row {
+      cursor: pointer;
+    }
+
+    table.scan-table tr.scan-hit-row:hover {
+      background: #1e2536;
+    }
+
     .sym-link {
       color: #60a5fa;
       font-weight: 700;
@@ -539,14 +911,37 @@
       align-items: center;
       gap: 4px;
     }
+
     .scan-hit-row:hover .sym-link {
       color: #93c5fd;
       text-decoration: underline;
     }
-    .pill-status { padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; display: inline-block; }
-    .pill-BREAKOUT { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
-    .pill-MID { background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.4); }
-    .pill-LOW { background: rgba(234, 179, 8, 0.16); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.35); }
+
+    .pill-status {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    .pill-BREAKOUT {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+
+    .pill-MID {
+      background: rgba(20, 184, 166, 0.2);
+      color: #2dd4bf;
+      border: 1px solid rgba(20, 184, 166, 0.4);
+    }
+
+    .pill-LOW {
+      background: rgba(234, 179, 8, 0.16);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.35);
+    }
 
     /* Scanner Pagination Footer */
     .scanner-pagination {
@@ -560,9 +955,19 @@
       color: var(--text-muted);
       flex-shrink: 0;
     }
-    .page-controls { display: flex; align-items: center; gap: 6px; }
 
-    .header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .page-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
     table.scan-table tr.scan-hit-row.selected {
       background: #1b2a4a;
       box-shadow: inset 3px 0 0 var(--accent);
@@ -570,7 +975,8 @@
 
     /* ---- Docked scanner: behaves like the right-hand pattern panel ---- */
     .scanner-backdrop.docked {
-      inset: 44px 0 0 auto;            /* top right bottom left */
+      inset: 44px 0 0 auto;
+      /* top right bottom left */
       width: var(--dock-w);
       padding: 0;
       background: var(--bg-panel);
@@ -579,7 +985,11 @@
       justify-content: stretch;
       transition: width 0.18s ease;
     }
-    body.resizing-dock .scanner-backdrop.docked { transition: none; }
+
+    body.resizing-dock .scanner-backdrop.docked {
+      transition: none;
+    }
+
     .scanner-backdrop.docked .scanner-modal {
       width: 100% !important;
       max-width: 100%;
@@ -590,21 +1000,45 @@
       border-left: 1px solid var(--border);
       box-shadow: none;
     }
-    .scanner-backdrop.docked .scanner-header { padding: 8px 10px; }
-    .scanner-backdrop.docked .scanner-header h3 { font-size: 12.5px; }
-    .scanner-backdrop.docked .scanner-header h3 span { display: none; }
-    .scanner-backdrop.docked .scanner-controls { padding: 8px 10px; }
-    .scanner-backdrop.docked .scanner-textarea { display: none; }
-    .scanner-backdrop.docked .scanner-filter-bar { padding: 6px 10px; }
-    .scanner-backdrop.docked .scanner-table-wrap { padding: 0 8px 8px; }
+
+    .scanner-backdrop.docked .scanner-header {
+      padding: 8px 10px;
+    }
+
+    .scanner-backdrop.docked .scanner-header h3 {
+      font-size: 12.5px;
+    }
+
+    .scanner-backdrop.docked .scanner-header h3 span {
+      display: none;
+    }
+
+    .scanner-backdrop.docked .scanner-controls {
+      padding: 8px 10px;
+    }
+
+    .scanner-backdrop.docked .scanner-textarea {
+      display: none;
+    }
+
+    .scanner-backdrop.docked .scanner-filter-bar {
+      padding: 6px 10px;
+    }
+
+    .scanner-backdrop.docked .scanner-table-wrap {
+      padding: 0 8px 8px;
+    }
+
     .scanner-backdrop.docked .scanner-pagination {
       padding: 6px 10px;
       flex-wrap: wrap;
       gap: 6px;
     }
+
     #dock-resizer {
       position: fixed;
-      top: 44px; bottom: 0;
+      top: 44px;
+      bottom: 0;
       right: calc(var(--dock-w) - 3px);
       width: 6px;
       cursor: col-resize;
@@ -612,21 +1046,613 @@
       display: none;
       touch-action: none;
     }
-    #dock-resizer:hover, #dock-resizer.dragging { background: rgba(41, 98, 255, 0.5); }
+
+    #dock-resizer:hover,
+    #dock-resizer.dragging {
+      background: rgba(41, 98, 255, 0.5);
+    }
+
+    /* Professional Backtester Specific Styling */
+    #backtest-modal .scanner-modal {
+      width: 1320px;
+      max-width: 98vw;
+      height: 94vh;
+      max-height: 94vh;
+    }
+
+    #backtest-modal .scanner-table-wrap {
+      flex: 1 1 0;
+      min-height: 250px;
+      overflow-y: auto;
+      overflow-x: auto;
+      padding: 0 14px 10px 14px;
+    }
+
+    #backtest-modal .bt-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      padding: 8px 14px;
+      background: #111520;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #backtest-modal .bt-kpi-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    #backtest-modal .bt-kpi-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    #backtest-modal .bt-kpi-val {
+      font-size: 14.5px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #e2e8f0;
+    }
+
+    #backtest-modal .bt-kpi-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    #backtest-modal .bt-positive {
+      color: #4ade80 !important;
+    }
+
+    #backtest-modal .bt-negative {
+      color: #f87171 !important;
+    }
+
+    #backtest-modal .bt-summary-strip {
+      padding: 7px 14px;
+      background: #131826;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* Docked mode optimizations */
+    .scanner-backdrop.docked#backtest-modal .scanner-modal {
+      width: 100% !important;
+      height: 100% !important;
+      max-height: none !important;
+    }
+
+    .scanner-backdrop.docked#backtest-modal .bt-kpi-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 6px 8px;
+    }
+
+    .scanner-backdrop.docked#backtest-modal .bt-kpi-card {
+      padding: 5px 6px;
+    }
+
+    .scanner-backdrop.docked#backtest-modal .bt-kpi-val {
+      font-size: 12.5px;
+    }
+
+    .scanner-backdrop.docked#backtest-modal .scanner-table-wrap {
+      padding: 0 4px 6px;
+      min-height: 200px;
+    }
+
+    .scanner-backdrop.docked#backtest-modal table.scan-table {
+      min-width: 680px;
+    }
+
+    /* Light Theme UI Polish */
+    html[data-theme="light"] .symbol-combo input {
+      color: #0f172a !important;
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    html[data-theme="light"] .stock-dropdown-menu {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    }
+
+    html[data-theme="light"] .stock-dropdown-item:hover,
+    html[data-theme="light"] .stock-dropdown-item.highlighted {
+      background: #f1f5f9;
+    }
+
+    html[data-theme="light"] .dropdown-popover {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+    }
+
+    html[data-theme="light"] .scanner-menu-title {
+      color: #0f172a;
+    }
+
+    html[data-theme="light"] .scanner-modal {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    html[data-theme="light"] .scan-table thead th {
+      background: #f8fafc;
+      color: #475569;
+      border-bottom: 2px solid #cbd5e1;
+    }
+
+    html[data-theme="light"] .scan-table tbody tr {
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    html[data-theme="light"] .scan-hit-row:hover {
+      background: #f8fafc;
+    }
+
+    html[data-theme="light"] .filter-input,
+    html[data-theme="light"] .scanner-textarea {
+      background: #f8fafc;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    html[data-theme="light"] .sidebar-header {
+      color: #0f172a;
+    }
+
+    html[data-theme="light"] .bt-kpi-card {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+
+    html[data-theme="light"] .bt-kpi-title {
+      color: #64748b;
+    }
+
+    html[data-theme="light"] .bt-summary-strip {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    html[data-theme="light"] #bt-strip-text {
+      color: #0f172a !important;
+    }
+
+    /* Sector Rotation & RRG Badges */
+    .pill-LEADING {
+      background: rgba(34, 197, 94, 0.16);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      font-weight: 700;
+    }
+
+    .pill-IMPROVING {
+      background: rgba(56, 189, 248, 0.16);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      font-weight: 700;
+    }
+
+    .pill-WEAKENING {
+      background: rgba(245, 158, 11, 0.16);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      font-weight: 700;
+    }
+
+    .pill-LAGGING {
+      background: rgba(239, 68, 68, 0.16);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      font-weight: 700;
+    }
+
+    .rs-bar-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: 100px;
+    }
+
+    .rs-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .rs-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+    }
+
+    /* Sector Rotation & Market Strength Studio (getmarketstrength.com style) */
+    #sector-rotation-modal .scanner-modal {
+      width: 1400px;
+      max-width: 98vw;
+      height: 96vh;
+      max-height: 96vh;
+    }
+
+    .sr-subtabs-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .sr-subtab-btn {
+      padding: 5px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+    }
+
+    .sr-subtab-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-elevated);
+    }
+
+    .sr-subtab-btn.active {
+      background: #0284c7;
+      border-color: #0284c7;
+      color: #ffffff;
+    }
+
+    .sr-tab-pane {
+      display: none;
+      flex: 1 1 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .sr-tab-pane.active {
+      display: flex;
+    }
+
+    /* Tab 1: RRG Split View */
+    .sr-rrg-split {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .sr-rrg-left {
+      width: 410px;
+      min-width: 380px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+    }
+
+    .sr-rrg-right {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 14px;
+      background: var(--bg-main);
+      overflow-y: auto;
+    }
+
+    .sr-cat-pills {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+
+    .sr-cat-pill {
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .sr-cat-pill.active {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #38bdf8;
+    }
+
+    html[data-theme="light"] .sr-cat-pill.active {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+    .sr-quadrant-group-header {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sr-item-row {
+      display: grid;
+      grid-template-columns: 1fr 42px 48px 48px 48px 42px;
+      gap: 4px;
+      align-items: center;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .sr-item-row:hover {
+      background: var(--bg-elevated);
+    }
+
+    .sr-item-row.selected {
+      background: rgba(56, 189, 248, 0.14) !important;
+      border-left: 3px solid #38bdf8;
+    }
+
+    .sr-rs-pill {
+      display: inline-block;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-align: center;
+      color: #ffffff;
+    }
+
+    /* Tab 2: Strongest Cards Grid */
+    .sr-cards-container {
+      flex: 1 1 0;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+
+    .sr-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(295px, 1fr));
+      gap: 12px;
+    }
+
+    .sr-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-left: 4px solid #64748b;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sr-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    .sr-card.card-leading {
+      border-left-color: #22c55e;
+    }
+
+    .sr-card.card-improving {
+      border-left-color: #38bdf8;
+    }
+
+    .sr-card.card-weakening {
+      border-left-color: #f59e0b;
+    }
+
+    .sr-card.card-lagging {
+      border-left-color: #ef4444;
+    }
+
+    .sr-card-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sr-card-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.35;
+      min-height: 28px;
+    }
+
+    .sr-card-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 6px 8px;
+      background: var(--bg-elevated);
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .sr-card-stat-title {
+      font-size: 9.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .sr-card-stat-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .sr-card-stocks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .sr-stock-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      text-decoration: none;
+    }
+
+    .sr-stock-tag:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .sr-stock-tag b {
+      color: #22c55e;
+      font-size: 9.5px;
+    }
+
+    /* Tab 3: Money Movement (Climbers vs Fallers) */
+    .sr-money-wrap {
+      flex: 1 1 0;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      gap: 16px;
+    }
+
+    .sr-money-col {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sr-money-header {
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sr-money-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* Tab 4: Group Performance */
+    .sr-perf-wrap {
+      flex: 1 1 0;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sr-perf-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .sr-perf-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      height: 360px;
+    }
+
+    .scanner-backdrop.docked#sector-rotation-modal .sr-rrg-split {
+      flex-direction: column;
+    }
+
+    .scanner-backdrop.docked#sector-rotation-modal .sr-rrg-left {
+      width: 100%;
+      min-width: 0;
+      height: 280px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .scanner-backdrop.docked#sector-rotation-modal .sr-perf-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .scanner-backdrop.docked#sector-rotation-modal .sr-money-wrap {
+      flex-direction: column;
+    }
   </style>
 </head>
+
 <body>
 
   <!-- Fixed Top Bar -->
   <div class="topbar">
     <div class="symbol-combo" id="symbol-combo-wrap">
-      <input
-        type="text"
-        id="symbol-input"
-        value="^NSEI"
-        placeholder="Search 2,200+ NSE stocks..."
-        autocomplete="off"
-      />
+      <input type="text" id="symbol-input" value="^NSEI" placeholder="Search 2,200+ NSE stocks..." autocomplete="off" />
       <button type="button" class="symbol-clear-btn" id="clear-symbol-btn" title="Clear & Browse Stocks">✕</button>
       <div class="stock-dropdown-menu" id="stock-dropdown-menu">
         <div class="stock-dropdown-meta" id="stock-dropdown-meta">Loading NSE universe...</div>
@@ -637,30 +1663,68 @@
 
     <div class="bar-divider"></div>
 
-    <!-- Timeframes (1m to M) -->
-    <div class="btn-group" id="tf-buttons">
-      <button data-tf="1m" data-label="1m">1m</button>
-      <button data-tf="3m" data-label="3m">3m</button>
-      <button data-tf="5m" data-label="5m">5m</button>
-      <button data-tf="15m" data-label="15m">15m</button>
-      <button data-tf="30m" data-label="30m">30m</button>
-      <button data-tf="1h" data-label="1H">1H</button>
-      <button data-tf="2h" data-label="2H">2H</button>
-      <button data-tf="4h" data-label="4H">4H</button>
-      <button data-tf="1d" data-label="D" class="active">D</button>
-      <button data-tf="1wk" data-label="W">W</button>
-      <button data-tf="1mo" data-label="M">M</button>
+    <!-- Timeframe Dropdown + Quick Shortcuts -->
+    <div class="dropdown-wrap" id="tf-dropdown-wrap">
+      <button class="pill-btn" id="tf-dropdown-btn" title="Select Timeframe"
+        style="font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:4px; padding: 4px 8px;">
+        <span id="tf-active-label">⏱ D</span> ▾
+      </button>
+      <div class="dropdown-popover" id="tf-dropdown-popover" style="width: 175px;">
+        <div class="pop-header"><span>Standard Intervals</span></div>
+        <button type="button" class="tf-select-option" data-tf="1d" data-label="D">Daily (D)</button>
+        <button type="button" class="tf-select-option" data-tf="1wk" data-label="W">Weekly (W)</button>
+        <button type="button" class="tf-select-option" data-tf="1mo" data-label="M">Monthly (M)</button>
+        <div class="pop-header" style="margin-top:4px;"><span>Intraday Intervals</span></div>
+        <button type="button" class="tf-select-option" data-tf="1m" data-label="1m">1m (1 Min)</button>
+        <button type="button" class="tf-select-option" data-tf="3m" data-label="3m">3m (3 Min)</button>
+        <button type="button" class="tf-select-option" data-tf="5m" data-label="5m">5m (5 Min)</button>
+        <button type="button" class="tf-select-option" data-tf="15m" data-label="15m">15m (15 Min)</button>
+        <button type="button" class="tf-select-option" data-tf="30m" data-label="30m">30m (30 Min)</button>
+        <button type="button" class="tf-select-option" data-tf="1h" data-label="1H">1H (1 Hour)</button>
+        <button type="button" class="tf-select-option" data-tf="2h" data-label="2H">2H (2 Hours)</button>
+        <button type="button" class="tf-select-option" data-tf="4h" data-label="4H">4H (4 Hours)</button>
+      </div>
+    </div>
+
+    <!-- Quick Timeframe Shortcuts (15m, 1H, D, W) -->
+    <div class="btn-group" id="tf-quick-group">
+      <button class="pill-btn tf-quick-btn" data-tf="15m" data-label="15m" style="padding: 4px 6px;">15m</button>
+      <button class="pill-btn tf-quick-btn" data-tf="1h" data-label="1H" style="padding: 4px 6px;">1H</button>
+      <button class="pill-btn tf-quick-btn active" data-tf="1d" data-label="D" style="padding: 4px 6px;">D</button>
+      <button class="pill-btn tf-quick-btn" data-tf="1wk" data-label="W" style="padding: 4px 6px;">W</button>
     </div>
 
     <div class="bar-divider"></div>
 
-    <!-- Preset View Modes -->
-    <div class="btn-group" id="mode-buttons">
-      <button data-mode="clean" class="active">Clean</button>
-      <button data-mode="structure">Structure</button>
-      <button data-mode="patterns">Patterns</button>
-      <button data-mode="everything" >Everything</button>
-      <button data-mode="custom">Custom</button>
+    <!-- Preset View Modes Dropdown -->
+    <div class="dropdown-wrap" id="mode-dropdown-wrap">
+      <button class="pill-btn" id="mode-dropdown-btn" title="Select Chart View Mode"
+        style="display:flex; align-items:center; gap:4px; font-weight:600; padding: 4px 8px;">
+        <span id="mode-active-label">👁️ Clean</span> ▾
+      </button>
+      <div class="dropdown-popover" id="mode-dropdown-popover" style="width: 215px;">
+        <div class="pop-header"><span>Chart View Mode</span></div>
+        <button type="button" class="scanner-menu-item mode-option" data-mode="clean">
+          <span class="scanner-menu-title">🧼 Clean</span>
+          <span class="scanner-menu-desc">Price &amp; Volume only. No overlays.</span>
+        </button>
+        <button type="button" class="scanner-menu-item mode-option" data-mode="structure">
+          <span class="scanner-menu-title">🏗️ Structure</span>
+          <span class="scanner-menu-desc">Dynamic S&amp;R, SMC &amp; Auto Trendlines.</span>
+        </button>
+        <button type="button" class="scanner-menu-item mode-option" data-mode="patterns">
+          <span class="scanner-menu-title">📐 Patterns</span>
+          <span class="scanner-menu-desc">14 Classical Chart Patterns.</span>
+        </button>
+        <button type="button" class="scanner-menu-item mode-option" data-mode="everything">
+          <span class="scanner-menu-title">🌟 Everything</span>
+          <span class="scanner-menu-desc">Structure, SMC, Trendlines &amp; Patterns.</span>
+        </button>
+        <button type="button" class="scanner-menu-item mode-option" data-mode="custom">
+          <span class="scanner-menu-title">⚙️ Custom</span>
+          <span class="scanner-menu-desc">Custom layer selections.</span>
+        </button>
+      </div>
     </div>
 
     <!-- Right Controls -->
@@ -672,18 +1736,40 @@
           <div class="pop-header"><span>Market Screeners</span></div>
           <button type="button" class="scanner-menu-item" id="menu-open-ch">
             <span class="scanner-menu-title">🏆 Cup &amp; Handle Screener</span>
-            <span class="scanner-menu-desc">60% Low Cheat, 80% Mid Cheat, Handle Pivot, Handle SL &amp; 100% Rim Breakout.</span>
+            <span class="scanner-menu-desc">60% Low Cheat, 80% Mid Cheat, Handle Pivot, Handle SL &amp; 100% Rim
+              Breakout.</span>
           </button>
           <button type="button" class="scanner-menu-item" id="menu-open-myb">
             <span class="scanner-menu-title">🚀 Multi-Year Breakout Scanner</span>
-            <span class="scanner-menu-desc">2Y, 3Y, 5Y &amp; All-Time High breakouts, retests, and pre-breakout coils.</span>
+            <span class="scanner-menu-desc">2Y, 3Y, 5Y &amp; All-Time High breakouts, retests, and pre-breakout
+              coils.</span>
           </button>
           <button type="button" class="scanner-menu-item" id="menu-open-hl">
             <span class="scanner-menu-title">📊 Weekly HL / LL Scanner</span>
-            <span class="scanner-menu-desc">Weekly Higher Low / Lower Low detector with 30W SMA &amp; RSI reversal forecast.</span>
+            <span class="scanner-menu-desc">Weekly Higher Low / Lower Low detector with 30W SMA &amp; RSI reversal
+              forecast.</span>
+          </button>
+          <div class="pop-header" style="margin-top:4px;"><span>Market Strength &amp; Sectors</span></div>
+          <button type="button" class="scanner-menu-item" id="menu-open-sector-rotation">
+            <span class="scanner-menu-title" style="color:#38bdf8;">🧭 Sector Rotation &amp; Market Strength</span>
+            <span class="scanner-menu-desc">Relative Rotation Graphs (RRG), RS Ratings 1-99, Breadth &amp; 4-Quadrant
+              Sector Momentum.</span>
+          </button>
+          <div class="pop-header" style="margin-top:4px;"><span>Strategy Testing</span></div>
+          <button type="button" class="scanner-menu-item" id="menu-open-backtest">
+            <span class="scanner-menu-title" style="color:#2dd4bf;">🧪 Strategy Backtester</span>
+            <span class="scanner-menu-desc">Simulate Cup &amp; Handle, MYB, Reversals &amp; Patterns with risk
+              management.</span>
           </button>
         </div>
       </div>
+
+      <button class="pill-btn" id="btn-top-sector-rotation"
+        title="Open Sector Rotation & Relative Rotation Graphs (RRG)"
+        style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; font-weight:600;">🧭 Sector Rotation</button>
+
+      <button class="pill-btn" id="btn-top-backtest" title="Open Strategy Backtester"
+        style="border-color: rgba(45, 212, 191, 0.4); color: #2dd4bf; font-weight:600;">🧪 Backtest</button>
 
       <!-- Indicators Dropdown -->
       <div class="dropdown-wrap">
@@ -719,45 +1805,82 @@
             </div>
           </div>
           <div class="pop-list" id="pattern-toggles"></div>
-          <label class="pop-item"><input type="checkbox" id="chk-cup-latest" checked /> Cup &amp; Handle: latest only</label>
+          <label class="pop-item"><input type="checkbox" id="chk-cup-latest" checked /> Cup &amp; Handle: latest
+            only</label>
         </div>
       </div>
 
       <button class="pill-btn active-outline" id="toggle-sidebar-btn">Patterns (0)</button>
+
+      <!-- Theme Switcher (System / Dark / Light) -->
+      <button class="pill-btn" id="theme-toggle-btn" title="Toggle Theme (Auto System / Dark / Light)"
+        style="display:flex; align-items:center; gap:5px; font-weight:600; padding: 4px 8px;">
+        <span id="theme-icon">💻</span>
+        <span id="theme-label" style="font-size:11px;">System</span>
+      </button>
     </div>
   </div>
 
   <!-- Fixed Left Drawing Toolbar -->
   <div class="left-toolbar">
     <button class="tool-btn active" data-tool="cursor" title="Crosshair / Pan">
-      <svg viewBox="0 0 24 24"><path d="M4 4l7 17 2.5-6.5L20 12 4 4z"/></svg>
+      <svg viewBox="0 0 24 24">
+        <path d="M4 4l7 17 2.5-6.5L20 12 4 4z" />
+      </svg>
     </button>
     <button class="tool-btn" data-tool="line" title="Trend Line">
-      <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/><line x1="6.5" y1="17.5" x2="17.5" y2="6.5"/></svg>
+      <svg viewBox="0 0 24 24">
+        <circle cx="5" cy="19" r="2" />
+        <circle cx="19" cy="5" r="2" />
+        <line x1="6.5" y1="17.5" x2="17.5" y2="6.5" />
+      </svg>
     </button>
     <button class="tool-btn" data-tool="hline" title="Horizontal Ray / Line">
-      <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="12" cy="12" r="2"/></svg>
+      <svg viewBox="0 0 24 24">
+        <line x1="3" y1="12" x2="21" y2="12" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
     </button>
     <button class="tool-btn" data-tool="box" title="Rectangle / Supply-Demand Zone">
-      <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+      <svg viewBox="0 0 24 24">
+        <rect x="4" y="6" width="16" height="12" rx="1" />
+      </svg>
     </button>
     <button class="tool-btn" data-tool="fib" title="Fib Retracement Levels">
-      <svg viewBox="0 0 24 24"><line x1="4" y1="5" x2="20" y2="5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="4" y1="19" x2="20" y2="19"/></svg>
+      <svg viewBox="0 0 24 24">
+        <line x1="4" y1="5" x2="20" y2="5" />
+        <line x1="4" y1="10" x2="20" y2="10" />
+        <line x1="4" y1="15" x2="20" y2="15" />
+        <line x1="4" y1="19" x2="20" y2="19" />
+      </svg>
     </button>
     <button class="tool-btn" data-tool="brush" title="Freehand Brush">
-      <svg viewBox="0 0 24 24"><path d="M18 3a3 3 0 0 1 3 3L9 18l-5 1 1-5L18 3z"/></svg>
+      <svg viewBox="0 0 24 24">
+        <path d="M18 3a3 3 0 0 1 3 3L9 18l-5 1 1-5L18 3z" />
+      </svg>
     </button>
 
     <div class="tool-sep"></div>
 
     <button class="tool-btn" id="toggle-drawings-vis" title="Hide / Show Drawings">
-      <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <svg viewBox="0 0 24 24">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
     </button>
     <button class="tool-btn" id="undo-drawing" title="Undo Last Drawing">
-      <svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+      <svg viewBox="0 0 24 24">
+        <polyline points="9 14 4 9 9 4" />
+        <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+      </svg>
     </button>
     <button class="tool-btn" id="clear-drawings" title="Delete All Drawings">
-      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      <svg viewBox="0 0 24 24">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14H6L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </svg>
     </button>
   </div>
 
@@ -776,24 +1899,41 @@
     <div class="chart-nav-controls">
       <div class="nav-cluster">
         <button class="chart-nav-btn" id="nav-zoom-out" title="Zoom Out (-)">
-          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24">
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
         </button>
         <button class="chart-nav-btn" id="nav-zoom-in" title="Zoom In (+)">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
         </button>
       </div>
       <div class="nav-cluster">
         <button class="chart-nav-btn" id="nav-scroll-left" title="Scroll Left (←)">
-          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg viewBox="0 0 24 24">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
         </button>
         <button class="chart-nav-btn" id="nav-scroll-right" title="Scroll Right (→)">
-          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg viewBox="0 0 24 24">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
       </div>
       <div class="nav-cluster">
         <button class="chart-nav-btn" id="nav-reset" title="Reset Chart View (Alt+R)">
-          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+          <svg viewBox="0 0 24 24">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+            <polyline points="3 3 3 8 8 8" />
+          </svg>
         </button>
+      </div>
+      <div class="nav-cluster"
+        style="font-size:10.5px; font-weight:700; color:var(--text-muted); padding:0 8px; display:flex; align-items:center; user-select:none; letter-spacing:0.3px;"
+        title="Chart time is synchronized to Indian Standard Time (IST, UTC+5:30)">
+        <span>IST (UTC+5:30)</span>
       </div>
     </div>
   </div>
@@ -814,8 +1954,11 @@
   <div class="scanner-backdrop" id="scanner-modal">
     <div class="scanner-modal">
       <div class="scanner-header">
-        <h3>🏆 Cup &amp; Handle Screener — 60% Low Cheat · 80% Mid Cheat · Handle Pivot · 100% Breakout <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to plot Cup, Handle &amp; Levels)</span></h3>
-        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="scanner-modal">⇥ Dock</button><button id="close-scanner-btn" class="pill-btn">✕ Close</button></div>
+        <h3>🏆 Cup &amp; Handle Screener — 60% Low Cheat · 80% Mid Cheat · Handle Pivot · 100% Breakout <span
+            style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to plot Cup, Handle
+            &amp; Levels)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="scanner-modal">⇥
+            Dock</button><button id="close-scanner-btn" class="pill-btn">✕ Close</button></div>
       </div>
 
       <div class="scanner-controls">
@@ -846,14 +1989,16 @@
       </div>
 
       <div class="scanner-filter-bar">
-        <input type="text" id="ch-filter-symbol" class="filter-input" style="width:140px;" placeholder="Filter Symbol..." />
+        <input type="text" id="ch-filter-symbol" class="filter-input" style="width:140px;"
+          placeholder="Filter Symbol..." />
         <select id="ch-filter-status" class="pill-btn">
           <option value="ALL">All Stages (60% / 80% / 100%)</option>
           <option value="LOW CHEAT (60%)">LOW CHEAT (60%)</option>
           <option value="MID CHEAT (80%)">MID CHEAT (80%)</option>
           <option value="BREAKOUT (100%)">BREAKOUT (100%)</option>
         </select>
-        <input type="number" id="ch-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0" placeholder="Min Rel Vol (1.2)" />
+        <input type="number" id="ch-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0"
+          placeholder="Min Rel Vol (1.2)" />
         <button id="ch-reset-filters" class="pill-btn">Reset Filters</button>
         <button id="ch-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
       </div>
@@ -908,8 +2053,11 @@
   <div class="scanner-backdrop" id="myb-scanner-modal">
     <div class="scanner-modal" style="width: 1180px;">
       <div class="scanner-header">
-        <h3>🚀 Multi-Year Breakout (MYB) Screener <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart &amp; Multi-Year Ceiling)</span></h3>
-        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="myb-scanner-modal">⇥ Dock</button><button id="close-myb-scanner-btn" class="pill-btn">✕ Close</button></div>
+        <h3>🚀 Multi-Year Breakout (MYB) Screener <span
+            style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart
+            &amp; Multi-Year Ceiling)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="myb-scanner-modal">⇥
+            Dock</button><button id="close-myb-scanner-btn" class="pill-btn">✕ Close</button></div>
       </div>
 
       <div class="scanner-controls">
@@ -942,14 +2090,16 @@
       </div>
 
       <div class="scanner-filter-bar">
-        <input type="text" id="myb-filter-symbol" class="filter-input" style="width:140px;" placeholder="Filter Symbol..." />
+        <input type="text" id="myb-filter-symbol" class="filter-input" style="width:140px;"
+          placeholder="Filter Symbol..." />
         <select id="myb-filter-status" class="pill-btn">
           <option value="ALL">All Stages</option>
           <option value="BREAKOUT">BREAKOUT</option>
           <option value="RETEST">RETEST</option>
           <option value="NEAR BREAKOUT">NEAR BREAKOUT</option>
         </select>
-        <input type="number" id="myb-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0" placeholder="Min Rel Vol (1.2)" />
+        <input type="number" id="myb-filter-relvol" class="filter-input" style="width:130px;" step="0.1" min="0"
+          placeholder="Min Rel Vol (1.2)" />
         <button id="myb-reset-filters" class="pill-btn">Reset Filters</button>
         <button id="myb-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
       </div>
@@ -1004,8 +2154,11 @@
   <div class="scanner-backdrop" id="hl-scanner-modal">
     <div class="scanner-modal" style="width: 1140px;">
       <div class="scanner-header">
-        <h3>📊 Weekly Swing Low (HL / LL) Scanner &amp; Reversal Forecast <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart &amp; trigger levels)</span></h3>
-        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="hl-scanner-modal">⇥ Dock</button><button id="close-hl-scanner-btn" class="pill-btn">✕ Close</button></div>
+        <h3>📊 Weekly Swing Low (HL / LL) Scanner &amp; Reversal Forecast <span
+            style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any symbol to open Weekly chart
+            &amp; trigger levels)</span></h3>
+        <div class="header-actions"><button class="pill-btn dock-toggle-btn" data-modal="hl-scanner-modal">⇥
+            Dock</button><button id="close-hl-scanner-btn" class="pill-btn">✕ Close</button></div>
       </div>
 
       <div class="scanner-controls">
@@ -1037,7 +2190,8 @@
       </div>
 
       <div class="scanner-filter-bar">
-        <input type="text" id="hl-filter-symbol" class="filter-input" style="width:150px;" placeholder="Filter Symbol..." />
+        <input type="text" id="hl-filter-symbol" class="filter-input" style="width:150px;"
+          placeholder="Filter Symbol..." />
         <select id="hl-filter-swing" class="pill-btn">
           <option value="ALL">All Swings (HL &amp; LL)</option>
           <option value="HL">HL Only</option>
@@ -1098,12 +2252,491 @@
     </div>
   </div>
 
+  <!-- 4. Strategy Backtest Modal -->
+  <div class="scanner-backdrop" id="backtest-modal">
+    <div class="scanner-modal" style="width: 1300px;">
+      <div class="scanner-header">
+        <h3>🧪 Strategy Backtester — Event-Driven Risk Management &amp; Performance <span
+            style="font-size:11px; color:var(--text-muted); font-weight:400;">(Click any trade to plot on chart)</span>
+        </h3>
+        <div class="header-actions">
+          <button class="pill-btn" id="bt-toggle-config-btn" title="Toggle Configuration Bar" style="font-size:11px;">⚙️
+            Config ▾</button>
+          <button class="pill-btn dock-toggle-btn" data-modal="backtest-modal">⇥ Dock</button>
+          <button id="close-backtest-btn" class="pill-btn">✕ Close</button>
+        </div>
+      </div>
+
+      <div class="scanner-controls" id="bt-controls-panel">
+        <div class="scanner-row">
+          <span style="font-size:12px; color:var(--text-muted);">Strategy:</span>
+          <select id="bt-strategy-select" class="pill-btn">
+            <option value="cup_handle" selected>Cup &amp; Handle (60%/80% Cheat &amp; Breakouts)</option>
+            <option value="myb">Multi-Year Breakout (2Y, 3Y, 5Y, ATH)</option>
+            <option value="weekly_reversal">Weekly HL/LL &amp; 30W SMA Reversals</option>
+            <option value="patterns">14 Classical Chart Patterns</option>
+            <option value="all">All Strategies Combined</option>
+          </select>
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">Universe:</span>
+          <select id="bt-preset-select" class="pill-btn">
+            <option value="single">⭐ Individual Stock (Enter Ticker)</option>
+            <option value="current">📍 Current Chart Stock</option>
+            <option value="nifty50" selected>Nifty 50</option>
+            <option value="nifty100">Nifty 100</option>
+            <option value="nifty_midcap">Nifty Midcap (150)</option>
+            <option value="nifty_smallcap">Nifty Smallcap (250)</option>
+            <option value="nifty500">Nifty 500</option>
+            <option value="nifty750">Nifty 750 (Total Market)</option>
+            <option value="watchlist">Pharma &amp; Watchlist (25 Stocks)</option>
+            <option value="custom">Custom Ticker List...</option>
+          </select>
+
+          <input type="text" id="bt-single-stock-input" class="filter-input"
+            style="width:130px; font-weight:700; text-transform:uppercase; color:#38bdf8; display:none;"
+            placeholder="e.g. RELIANCE" />
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">TF:</span>
+          <select id="bt-tf-select" class="pill-btn">
+            <option value="1d" selected>Daily (D)</option>
+            <option value="1wk">Weekly (W)</option>
+          </select>
+
+          <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">Period:</span>
+          <select id="bt-period-select" class="pill-btn">
+            <option value="1y">1 Year</option>
+            <option value="2y">2 Years</option>
+            <option value="3y" selected>3 Years</option>
+            <option value="5y">5 Years</option>
+          </select>
+
+          <button class="run-scan-btn" id="run-backtest-btn"
+            style="background:#0ea5e9; border-color:#0ea5e9; color:#fff;">▶ Run Backtest</button>
+          <span id="bt-status" style="font-size:11px; color:var(--text-muted); margin-left:auto;"></span>
+        </div>
+
+        <div class="scanner-row"
+          style="background:rgba(255,255,255,0.02); padding:4px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">
+          <span style="font-size:11.5px; color:var(--text-muted);">Capital (₹):</span>
+          <input type="number" id="bt-capital-input" class="filter-input" style="width:105px;" value="1000000"
+            step="50000" />
+
+          <span style="font-size:11.5px; color:var(--text-muted); margin-left:6px;">Risk/Trade:</span>
+          <input type="number" id="bt-risk-input" class="filter-input" style="width:60px;" value="1.0" step="0.25"
+            min="0.1" max="10.0" />
+          <span style="font-size:11px; color:var(--text-muted);">%</span>
+
+          <span style="font-size:11.5px; color:var(--text-muted); margin-left:6px;">Max Positions:</span>
+          <input type="number" id="bt-max-trades-input" class="filter-input" style="width:50px;" value="5" min="1"
+            max="20" />
+
+          <span style="font-size:11.5px; color:var(--text-muted); margin-left:6px;">Friction/STT:</span>
+          <input type="number" id="bt-friction-input" class="filter-input" style="width:60px;" value="0.15" step="0.05"
+            min="0" />
+          <span style="font-size:11px; color:var(--text-muted);">%</span>
+
+          <span id="bt-universe-badge" style="font-size:11px; color:var(--text-muted); margin-left:auto;">50 stocks
+            loaded • <a href="javascript:void(0)" id="bt-toggle-symbols-link"
+              style="color:#60a5fa; text-decoration:none;">Edit Tickers ▾</a></span>
+        </div>
+
+        <div id="bt-symbols-wrap" style="display:none; width:100%; margin-top:2px;">
+          <textarea id="bt-symbols-input" class="scanner-textarea" style="height:36px;"
+            placeholder="Comma separated tickers (e.g. RELIANCE, TCS, INFY)..."></textarea>
+        </div>
+      </div>
+
+      <!-- Compact 1-line strip when config is collapsed -->
+      <div class="bt-summary-strip" id="bt-summary-strip" style="display:none;">
+        <span id="bt-strip-text" style="font-weight:600; color:#e2e8f0;">Cup &amp; Handle • Nifty 50 • 3Y • Capital:
+          ₹10,00,000</span>
+        <button id="bt-strip-edit-btn" class="pill-btn" style="padding:2px 8px; font-size:10.5px; margin-left:auto;">⚙️
+          Edit Config</button>
+        <button id="bt-strip-rerun-btn" class="run-scan-btn" style="padding:2px 10px; font-size:10.5px;">▶
+          Re-Run</button>
+      </div>
+
+      <!-- KPI Summary Banner -->
+      <div class="bt-kpi-grid" id="bt-kpi-grid" style="display:none;">
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Net Profit</span>
+          <span class="bt-kpi-val" id="kpi-net-profit">₹ 0.00</span>
+          <span class="bt-kpi-sub" id="kpi-return-pct">+0.0%</span>
+        </div>
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Win Rate</span>
+          <span class="bt-kpi-val" id="kpi-win-rate">0.0%</span>
+          <span class="bt-kpi-sub" id="kpi-win-loss-count">0W / 0L</span>
+        </div>
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Profit Factor</span>
+          <span class="bt-kpi-val" id="kpi-profit-factor">0.00</span>
+          <span class="bt-kpi-sub" id="kpi-payoff">Payoff: 0.0x</span>
+        </div>
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Max Drawdown</span>
+          <span class="bt-kpi-val bt-negative" id="kpi-max-dd">0.0%</span>
+          <span class="bt-kpi-sub" id="kpi-dd-amount">Peak decline: ₹ 0</span>
+        </div>
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Expectancy</span>
+          <span class="bt-kpi-val" id="kpi-expectancy">0.00 R</span>
+          <span class="bt-kpi-sub" id="kpi-expectancy-cash">₹ 0 / trade</span>
+        </div>
+        <div class="bt-kpi-card">
+          <span class="bt-kpi-title">Trades &amp; Sharpe</span>
+          <span class="bt-kpi-val" id="kpi-total-trades">0</span>
+          <span class="bt-kpi-sub" id="kpi-sharpe">Sharpe: 0.00</span>
+        </div>
+      </div>
+
+      <div class="scanner-filter-bar">
+        <input type="text" id="bt-filter-symbol" class="filter-input" style="width:140px;"
+          placeholder="Filter Symbol..." />
+        <select id="bt-filter-outcome" class="pill-btn">
+          <option value="ALL">All Outcomes</option>
+          <option value="WIN">Winning Trades (PnL > 0)</option>
+          <option value="LOSS">Losing Trades (PnL &lt; 0)</option>
+        </select>
+        <select id="bt-filter-reason" class="pill-btn">
+          <option value="ALL">All Exit Reasons</option>
+          <option value="TARGET_2">Target 2 (T2)</option>
+          <option value="STOP_LOSS">Stop Loss (SL)</option>
+          <option value="TIME_STOP">Time Stop</option>
+          <option value="END_OF_DATA">End of Data</option>
+        </select>
+        <button id="bt-reset-filters" class="pill-btn">Reset Filters</button>
+        <button id="bt-export-excel" class="excel-btn" disabled>📥 Export Excel</button>
+      </div>
+
+      <div class="scanner-table-wrap">
+        <table class="scan-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Symbol</th>
+              <th>Strategy / Pattern</th>
+              <th>Direction</th>
+              <th>Entry Date</th>
+              <th>Entry (₹)</th>
+              <th>Exit Date</th>
+              <th>Exit (₹)</th>
+              <th>Exit Reason</th>
+              <th>PnL (₹)</th>
+              <th>Return (%)</th>
+              <th>R-Mult</th>
+              <th>Bars</th>
+            </tr>
+          </thead>
+          <tbody id="bt-results-body">
+            <tr>
+              <td colspan="13" style="text-align:center; color:var(--text-muted); padding:28px;">
+                Configure strategy and universe above, then click <b>▶ Run Backtest</b>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="scanner-pagination">
+        <span id="bt-page-info">Showing 0 of 0 trades</span>
+        <div class="page-controls">
+          <span>Rows:</span>
+          <select id="bt-page-size" class="pill-btn">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button id="bt-prev-page" class="pill-btn" disabled>◀ Prev</button>
+          <span id="bt-page-num">Page 1 of 1</span>
+          <button id="bt-next-page" class="pill-btn" disabled>Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Sector & Theme Rotation Studio (getmarketstrength.com style) -->
+  <div class="scanner-backdrop" id="sector-rotation-modal">
+    <div class="scanner-modal" style="width: 1400px; max-width: 98vw; height: 96vh;">
+      <!-- Modal Header -->
+      <div class="scanner-header" style="background:var(--bg-panel); border-bottom:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h3 style="margin:0; font-size:14px; display:flex; align-items:center; gap:6px;">
+            <span>🧭 Sector &amp; Theme Rotation</span>
+            <span style="font-size:11px; color:var(--text-muted); font-weight:400;">Market Strength Studio</span>
+          </h3>
+        </div>
+        <div class="header-actions">
+          <button class="pill-btn dock-toggle-btn" data-modal="sector-rotation-modal">⇥ Dock</button>
+          <button id="close-sector-rotation-btn" class="pill-btn">✕ Close</button>
+        </div>
+      </div>
+
+      <!-- Studio Sub-Navigation Tabs Bar -->
+      <div class="sr-subtabs-nav">
+        <button class="sr-subtab-btn active" data-tab="rrg">🧭 Rotation Graph (RRG)</button>
+        <button class="sr-subtab-btn" data-tab="cards">🏆 Strongest Groups (Cards)</button>
+        <button class="sr-subtab-btn" data-tab="money">💸 Where Money is Moving</button>
+        <button class="sr-subtab-btn" data-tab="perf">📈 Group Performance (Lines)</button>
+
+        <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; color:var(--text-muted);">Bench:</span>
+          <select id="sr-benchmark-select" class="pill-btn" style="padding:2px 6px; font-size:11px;">
+            <option value="^CRSLDX" selected>Nifty 500 (^CRSLDX)</option>
+            <option value="^NSEI">Nifty 50 (^NSEI)</option>
+            <option value="^NSEMDCP50">Nifty Midcap 50</option>
+          </select>
+
+          <span style="font-size:11px; color:var(--text-muted);">TF:</span>
+          <select id="sr-tf-select" class="pill-btn" style="padding:2px 6px; font-size:11px;">
+            <option value="1wk" selected>Weekly (Intermediate)</option>
+            <option value="1d">Daily (Short-Term)</option>
+          </select>
+
+          <span style="font-size:11px; color:var(--text-muted);">Trails:</span>
+          <select id="sr-tail-select" class="pill-btn" style="padding:2px 6px; font-size:11px;">
+            <option value="3" selected>3 wk</option>
+            <option value="5">5 wk</option>
+            <option value="8">8 wk</option>
+          </select>
+
+          <button class="run-scan-btn" id="run-sr-scan-btn"
+            style="padding:3px 8px; font-size:11px; background:#0284c7; border-color:#0284c7; color:#fff;">▶
+            Refresh</button>
+          <span id="sr-status" style="font-size:10.5px; color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <!-- TAB PANE 1: RRG Split View (Image 1) -->
+      <div class="sr-tab-pane active" id="sr-pane-rrg">
+        <div class="sr-rrg-split">
+          <!-- Left Sidebar Table (390px) -->
+          <div class="sr-rrg-left">
+            <div class="sr-cat-pills">
+              <button class="sr-cat-pill active" data-cat="all">All (<span id="sr-all-count">41</span>)</button>
+              <button class="sr-cat-pill" data-cat="sector">Sectors (<span id="sr-sec-count">20</span>)</button>
+              <button class="sr-cat-pill" data-cat="theme">Themes (<span id="sr-th-count">21</span>)</button>
+            </div>
+
+            <!-- Table Header -->
+            <div
+              style="display:grid; grid-template-columns: 1fr 42px 48px 48px 48px 42px; gap:4px; padding:6px 12px; font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--bg-elevated);">
+              <span>Sector &amp; theme</span>
+              <span style="text-align:center;">RS</span>
+              <span style="text-align:right;">1M</span>
+              <span style="text-align:right;">3M</span>
+              <span style="text-align:right;">6M</span>
+              <span style="text-align:right;">Δ RS</span>
+            </div>
+
+            <!-- Table Body with Collapsible Quadrant Sections -->
+            <div class="sr-table-scroll" id="sr-table-scroll" style="flex:1; overflow-y:auto;">
+              <!-- Dynamic groups rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Right RRG Visualizer Area -->
+          <div class="sr-rrg-right">
+            <!-- Filter ribbon & controls -->
+            <div
+              style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:700; font-size:13px; color:var(--text-main);">Sector &amp; theme
+                  rotation</span>
+                <span style="font-size:11px; color:var(--text-muted);"
+                  title="Relative Strength vs Benchmark (X) and 1M RS Momentum (Y)">ⓘ</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <button class="sr-filter-q-btn pill-btn active" data-quadrant="ALL">All</button>
+                <button class="sr-filter-q-btn pill-btn" data-quadrant="LEADING" style="color:#22c55e;">•
+                  Leading</button>
+                <button class="sr-filter-q-btn pill-btn" data-quadrant="IMPROVING" style="color:#38bdf8;">•
+                  Improving</button>
+                <button class="sr-filter-q-btn pill-btn" data-quadrant="WEAKENING" style="color:#f59e0b;">•
+                  Weakening</button>
+                <button class="sr-filter-q-btn pill-btn" data-quadrant="LAGGING" style="color:#ef4444;">•
+                  Lagging</button>
+                <label
+                  style="font-size:11px; display:flex; align-items:center; gap:4px; margin-left:6px; color:var(--text-muted); cursor:pointer;">
+                  <input type="checkbox" id="sr-toggle-trails" checked /> Trails
+                </label>
+                <button id="sr-replay-btn" class="pill-btn" style="padding:2px 8px; font-size:11px;">▶ Replay</button>
+                <button id="sr-export-excel" class="excel-btn"
+                  style="padding:2px 9px; font-size:11px; margin-left:4px;">⬇ Download</button>
+              </div>
+            </div>
+
+            <!-- SVG 4-Quadrant Visualizer -->
+            <div
+              style="position:relative; flex:1 1 0; min-height:360px; background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+              <svg id="rrg-svg" width="100%" height="100%" viewBox="0 0 760 480"
+                style="display:block; cursor:crosshair;"></svg>
+              <div id="rrg-tooltip"
+                style="position:absolute; display:none; pointer-events:none; background:var(--bg-elevated); color:var(--text-main); border:1px solid var(--border); border-radius:6px; padding:7px 12px; font-size:11.5px; box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:50;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB PANE 2: Strongest Groups Cards Grid (Images 4 & 5) -->
+      <div class="sr-tab-pane" id="sr-pane-cards" style="flex-direction:column;">
+        <div
+          style="padding:10px 16px; border-bottom:1px solid var(--border); background:var(--bg-panel); display:flex; flex-direction:column; gap:4px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-weight:700; font-size:13px; color:var(--text-main);">Strongest</span>
+            <select id="sr-cards-type-select" class="pill-btn" style="font-weight:700; color:#38bdf8;">
+              <option value="theme" selected>Theme (21)</option>
+              <option value="sector">Sector (20)</option>
+              <option value="all">All Groups (41)</option>
+            </select>
+            <label
+              style="font-size:11.5px; display:flex; align-items:center; gap:4px; margin-left:6px; cursor:pointer;">
+              <input type="checkbox" id="sr-card-filter-all" checked /> <b>All</b>
+            </label>
+            <label style="font-size:11.5px; display:flex; align-items:center; gap:4px; color:#22c55e; cursor:pointer;">
+              <input type="checkbox" class="sr-card-q-chk" value="LEADING" checked /> Leading (<span
+                id="card-count-leading">0</span>)
+            </label>
+            <label style="font-size:11.5px; display:flex; align-items:center; gap:4px; color:#38bdf8; cursor:pointer;">
+              <input type="checkbox" class="sr-card-q-chk" value="IMPROVING" checked /> Improving (<span
+                id="card-count-improving">0</span>)
+            </label>
+            <label style="font-size:11.5px; display:flex; align-items:center; gap:4px; color:#f59e0b; cursor:pointer;">
+              <input type="checkbox" class="sr-card-q-chk" value="WEAKENING" checked /> Weakening (<span
+                id="card-count-weakening">0</span>)
+            </label>
+            <label style="font-size:11.5px; display:flex; align-items:center; gap:4px; color:#ef4444; cursor:pointer;">
+              <input type="checkbox" class="sr-card-q-chk" value="LAGGING" checked /> Lagging (<span
+                id="card-count-lagging">0</span>)
+            </label>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+            Theme baskets cut across sectors (a stock can sit in several); lists are curated. Score = 60% median RS
+            rating + 20% members above 50 DMA + 20% above 200 DMA. Click a stock tag to plot on chart.
+          </div>
+        </div>
+
+        <div class="sr-cards-container">
+          <div class="sr-cards-grid" id="sr-cards-grid">
+            <!-- Dynamic Cards populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB PANE 3: Where Money is Moving (Image 2) -->
+      <div class="sr-tab-pane" id="sr-pane-money" style="flex-direction:column;">
+        <div
+          style="padding:10px 16px; border-bottom:1px solid var(--border); background:var(--bg-panel); display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span style="font-weight:700; font-size:13px; color:var(--text-main);">:: Where money is moving</span>
+          <span style="font-size:11px; color:var(--text-muted); font-weight:600;" id="sr-money-range">Recent 3-Week
+            Shift</span>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+            <button class="sr-money-filter-btn pill-btn active" data-type="all">All</button>
+            <button class="sr-money-filter-btn pill-btn" data-type="sectors">Sectors</button>
+            <button class="sr-money-filter-btn pill-btn" data-type="themes">Themes</button>
+            <span style="border-left:1px solid var(--border); height:16px; margin:0 4px;"></span>
+            <button class="sr-money-tf-btn pill-btn" data-tf="1d">1D</button>
+            <button class="sr-money-tf-btn pill-btn" data-tf="1w">1W</button>
+            <button class="sr-money-tf-btn pill-btn active" data-tf="3w">3W</button>
+            <button class="sr-money-tf-btn pill-btn" data-tf="6w">6W</button>
+          </div>
+        </div>
+
+        <div class="sr-money-wrap">
+          <!-- Left Column: CLIMBERS -->
+          <div class="sr-money-col">
+            <div class="sr-money-header" style="color:#22c55e;">
+              <span>CLIMBERS</span>
+              <span style="font-size:10.5px; color:var(--text-muted); font-weight:400;">Ranks climbed</span>
+            </div>
+            <div id="sr-climbers-list">
+              <!-- Climbers populated by JS -->
+            </div>
+          </div>
+
+          <!-- Right Column: FALLERS -->
+          <div class="sr-money-col">
+            <div class="sr-money-header" style="color:#ef4444;">
+              <span>FALLERS</span>
+              <span style="font-size:10.5px; color:var(--text-muted); font-weight:400;">Ranks fallen</span>
+            </div>
+            <div id="sr-fallers-list">
+              <!-- Fallers populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB PANE 4: Group Performance Comparative Line Charts (Image 3) -->
+      <div class="sr-tab-pane" id="sr-pane-perf" style="flex-direction:column;">
+        <div
+          style="padding:10px 16px; border-bottom:1px solid var(--border); background:var(--bg-panel); display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:700; font-size:13px; color:var(--text-main);">:: Group performance</span>
+              <span style="font-size:11px; color:var(--text-muted);">median of liquid stocks</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button class="sr-perf-filter-btn pill-btn active" data-type="all">All (41)</button>
+              <button class="sr-perf-filter-btn pill-btn" data-type="sectors">Sectors (20)</button>
+              <button class="sr-perf-filter-btn pill-btn" data-type="themes">Themes (21)</button>
+            </div>
+          </div>
+          <!-- Top leaders ribbon -->
+          <div
+            style="display:flex; align-items:center; gap:6px; font-size:11px; padding:3px 8px; border-radius:4px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.25); color:#22c55e;"
+            id="sr-perf-leaders-ribbon">
+            <span>▲ Leaders:</span>
+            <span id="sr-perf-ribbon-text" style="color:var(--text-main); font-weight:600;">Textiles leads the day
+              (+0.9%) · Realty week (+3.7%) · Media month (+18.2%)</span>
+          </div>
+        </div>
+
+        <div class="sr-perf-wrap">
+          <div class="sr-perf-grid">
+            <!-- Card 1: 1 WEEK -->
+            <div class="sr-perf-card">
+              <div
+                style="font-weight:700; font-size:11.5px; color:var(--text-main); margin-bottom:4px; display:flex; justify-content:space-between;">
+                <span>1 WEEK</span>
+                <span style="font-size:10.5px; color:var(--text-muted);">best &amp; worst 3</span>
+              </div>
+              <svg id="sr-line-chart-1w" width="100%" height="100%" viewBox="0 0 360 260" style="display:block;"></svg>
+            </div>
+
+            <!-- Card 2: 1 MONTH -->
+            <div class="sr-perf-card">
+              <div
+                style="font-weight:700; font-size:11.5px; color:var(--text-main); margin-bottom:4px; display:flex; justify-content:space-between;">
+                <span>1 MONTH</span>
+                <span style="font-size:10.5px; color:var(--text-muted);">best &amp; worst 3</span>
+              </div>
+              <svg id="sr-line-chart-1m" width="100%" height="100%" viewBox="0 0 360 260" style="display:block;"></svg>
+            </div>
+
+            <!-- Card 3: 3 MONTHS -->
+            <div class="sr-perf-card">
+              <div
+                style="font-weight:700; font-size:11.5px; color:var(--text-main); margin-bottom:4px; display:flex; justify-content:space-between;">
+                <span>3 MONTHS</span>
+                <span style="font-size:10.5px; color:var(--text-muted);">best &amp; worst 3</span>
+              </div>
+              <svg id="sr-line-chart-3m" width="100%" height="100%" viewBox="0 0 360 260" style="display:block;"></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // =========================================================================
     // DOCKED SCANNER LAYOUT (scanner panel on the right, chart resizes beside it)
     // =========================================================================
-    const SCANNER_MODAL_IDS = ["scanner-modal", "myb-scanner-modal", "hl-scanner-modal"];
-    const SCANNER_TYPE_TO_MODAL = { CH: "scanner-modal", MYB: "myb-scanner-modal", HL_LL: "hl-scanner-modal" };
+    const SCANNER_MODAL_IDS = ["scanner-modal", "myb-scanner-modal", "hl-scanner-modal", "backtest-modal", "sector-rotation-modal"];
+    const SCANNER_TYPE_TO_MODAL = { CH: "scanner-modal", MYB: "myb-scanner-modal", HL_LL: "hl-scanner-modal", BACKTEST: "backtest-modal", ROTATION: "sector-rotation-modal" };
     const dockResizer = document.getElementById("dock-resizer");
     const DOCK_MIN_W = 340;
     const SIDEBAR_W = 280;
@@ -1117,7 +2750,7 @@
     try {
       const saved = parseInt(localStorage.getItem("scannerDockW"), 10);
       if (saved >= DOCK_MIN_W) preferredDockW = saved;
-    } catch (e) {}
+    } catch (e) { }
 
     function effectiveDockW() {
       if (!dockedModal) return 0;
@@ -1170,6 +2803,9 @@
       const m = document.getElementById(id);
       m.classList.add("open", "docked");
       dockedModal = m;
+      if (id === "backtest-modal" || id === "sector-rotation-modal") {
+        preferredDockW = Math.max(preferredDockW, 720);
+      }
       applyLayout();
       refreshDockButtons();
     }
@@ -1441,7 +3077,7 @@
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetch("/api/index-baskets")
       .then(r => r.json())
@@ -1462,7 +3098,7 @@
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     const ALL_PATTERNS = [
       "Ascending Triangle",
@@ -1578,75 +3214,117 @@
       renderOverlays();
     };
 
-    document.querySelectorAll("#mode-buttons button").forEach(btn => {
+    const modeDropdownBtn = document.getElementById("mode-dropdown-btn");
+    const modeDropdownPop = document.getElementById("mode-dropdown-popover");
+    const modeActiveLabel = document.getElementById("mode-active-label");
+
+    const MODE_TITLES = {
+      clean: "🧼 Clean",
+      structure: "🏗️ Structure",
+      patterns: "📐 Patterns",
+      everything: "🌟 Everything",
+      custom: "⚙️ Custom"
+    };
+
+    function setCustomModeActive() {
+      if (modeActiveLabel) modeActiveLabel.textContent = MODE_TITLES.custom;
+    }
+
+    function setViewMode(mode) {
+      if (modeActiveLabel) modeActiveLabel.textContent = MODE_TITLES[mode] || mode;
+      if (modeDropdownPop) modeDropdownPop.classList.remove("open");
+
+      const chkSr = document.getElementById("chk-sr");
+      const chkSmc = document.getElementById("chk-smc");
+      const chkTl = document.getElementById("chk-tl");
+
+      if (mode === "clean") {
+        chkSr.checked = false;
+        chkSmc.checked = false;
+        chkTl.checked = false;
+        showPatternsLayer = false;
+        activeScanLevels = [];
+        activeScanSegments = [];
+        activeTrade = null;
+        setAllPlanLevels(true);
+        updatePlanLegend();
+      } else if (mode === "structure") {
+        chkSr.checked = true;
+        chkSmc.checked = true;
+        chkTl.checked = true;
+        showPatternsLayer = false;
+      } else if (mode === "patterns") {
+        chkSr.checked = false;
+        chkSmc.checked = false;
+        chkTl.checked = false;
+        showPatternsLayer = true;
+        if (selectedPatterns.size === 0) ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
+        renderPatternToggles();
+      } else if (mode === "everything") {
+        chkSr.checked = true;
+        chkSmc.checked = true;
+        chkTl.checked = true;
+        showPatternsLayer = true;
+        ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
+        renderPatternToggles();
+      }
+      renderOverlays();
+    }
+
+    document.querySelectorAll(".mode-option").forEach(btn => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll("#mode-buttons button").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        const mode = btn.dataset.mode;
-
-        const chkSr = document.getElementById("chk-sr");
-        const chkSmc = document.getElementById("chk-smc");
-        const chkTl = document.getElementById("chk-tl");
-
-        if (mode === "clean") {
-          chkSr.checked = false;
-          chkSmc.checked = false;
-          chkTl.checked = false;
-          showPatternsLayer = false;
-          activeScanLevels = [];
-          activeScanSegments = [];
-          activeTrade = null;
-          setAllPlanLevels(true);
-          updatePlanLegend();
-        } else if (mode === "structure") {
-          chkSr.checked = true;
-          chkSmc.checked = true;
-          chkTl.checked = true;
-          showPatternsLayer = false;
-        } else if (mode === "patterns") {
-          chkSr.checked = false;
-          chkSmc.checked = false;
-          chkTl.checked = false;
-          showPatternsLayer = true;
-          if (selectedPatterns.size === 0) ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
-          renderPatternToggles();
-        } else if (mode === "everything") {
-          chkSr.checked = true;
-          chkSmc.checked = true;
-          chkTl.checked = true;
-          showPatternsLayer = true;
-          ALL_PATTERNS.forEach(p => selectedPatterns.add(p));
-          renderPatternToggles();
-        }
-        renderOverlays();
+        setViewMode(btn.dataset.mode);
       });
     });
 
-    // Top Bar Dropdown Popovers (Scanners & Indicators)
+    // Top Bar Dropdown Popovers (Scanners, Indicators, Timeframe, View Mode)
     const scannersBtn = document.getElementById("scanners-btn");
     const scannersPop = document.getElementById("scanners-popover");
     const indBtn = document.getElementById("indicators-btn");
     const indPop = document.getElementById("indicators-popover");
 
-    scannersBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      indPop.classList.remove("open");
-      scannersPop.classList.toggle("open");
-    });
+    function closeAllTopPopovers() {
+      if (scannersPop) scannersPop.classList.remove("open");
+      if (indPop) indPop.classList.remove("open");
+      const tfPop = document.getElementById("tf-dropdown-popover");
+      if (tfPop) tfPop.classList.remove("open");
+      if (modeDropdownPop) modeDropdownPop.classList.remove("open");
+    }
 
-    indBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      scannersPop.classList.remove("open");
-      indPop.classList.toggle("open");
-    });
+    if (modeDropdownBtn && modeDropdownPop) {
+      modeDropdownBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = modeDropdownPop.classList.contains("open");
+        closeAllTopPopovers();
+        if (!isOpen) modeDropdownPop.classList.add("open");
+      });
+    }
+
+    if (scannersBtn && scannersPop) {
+      scannersBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = scannersPop.classList.contains("open");
+        closeAllTopPopovers();
+        if (!isOpen) scannersPop.classList.add("open");
+      });
+    }
+
+    if (indBtn && indPop) {
+      indBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = indPop.classList.contains("open");
+        closeAllTopPopovers();
+        if (!isOpen) indPop.classList.add("open");
+      });
+    }
 
     document.addEventListener("click", (e) => {
-      if (!indPop.contains(e.target) && e.target !== indBtn) {
-        indPop.classList.remove("open");
-      }
-      if (!scannersPop.contains(e.target) && e.target !== scannersBtn) {
-        scannersPop.classList.remove("open");
-      }
+      const tfPop = document.getElementById("tf-dropdown-popover");
+      const tfBtn = document.getElementById("tf-dropdown-btn");
+      if (indPop && !indPop.contains(e.target) && (!indBtn || !indBtn.contains(e.target))) indPop.classList.remove("open");
+      if (scannersPop && !scannersPop.contains(e.target) && (!scannersBtn || !scannersBtn.contains(e.target))) scannersPop.classList.remove("open");
+      if (modeDropdownPop && !modeDropdownPop.contains(e.target) && (!modeDropdownBtn || !modeDropdownBtn.contains(e.target))) modeDropdownPop.classList.remove("open");
+      if (tfPop && !tfPop.contains(e.target) && (!tfBtn || !tfBtn.contains(e.target))) tfPop.classList.remove("open");
     });
 
     const rightSidebar = document.getElementById("right-sidebar");
@@ -1667,6 +3345,80 @@
     });
     setSidebarOpen(false);   // sidebar starts collapsed (no patterns by default)
 
+    // =========================================================================
+    // THEME CONTROLLER (System / Dark / Light)
+    // =========================================================================
+    let currentTheme = localStorage.getItem("app_theme") || "system";
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    const themeIcon = document.getElementById("theme-icon");
+    const themeLabel = document.getElementById("theme-label");
+
+    function isSystemDark() {
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+
+    function updateChartTheme(isLight) {
+      if (typeof chart === "undefined" || !chart) return;
+      chart.applyOptions({
+        layout: {
+          background: { type: "solid", color: isLight ? "#ffffff" : "#0b0e14" },
+          textColor: isLight ? "#1e293b" : "#d1d4dc",
+        },
+        grid: {
+          vertLines: { color: isLight ? "#f1f5f9" : "#151a24" },
+          horzLines: { color: isLight ? "#f1f5f9" : "#151a24" },
+        },
+        rightPriceScale: { borderColor: isLight ? "#cbd5e1" : "#2a2e39" },
+        timeScale: { borderColor: isLight ? "#cbd5e1" : "#2a2e39" },
+      });
+    }
+
+    function applyTheme(theme, save = true) {
+      currentTheme = theme;
+      if (save) localStorage.setItem("app_theme", theme);
+      document.documentElement.setAttribute("data-theme", theme);
+
+      let effectiveIsLight = false;
+      if (theme === "light") {
+        effectiveIsLight = true;
+        if (themeIcon) themeIcon.textContent = "☀️";
+        if (themeLabel) themeLabel.textContent = "Light";
+      } else if (theme === "dark") {
+        effectiveIsLight = false;
+        if (themeIcon) themeIcon.textContent = "🌙";
+        if (themeLabel) themeLabel.textContent = "Dark";
+      } else {
+        effectiveIsLight = !isSystemDark();
+        if (themeIcon) themeIcon.textContent = "💻";
+        if (themeLabel) themeLabel.textContent = "Auto";
+      }
+
+      updateChartTheme(effectiveIsLight);
+      if (typeof renderRrgGraph === "function" && window.__sr_controller_ready) {
+        try { renderRrgGraph(); } catch (e) { }
+      }
+    }
+
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        if (currentTheme === "system") {
+          applyTheme("system", false);
+        }
+      });
+    }
+
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        if (currentTheme === "system") {
+          applyTheme("dark");
+        } else if (currentTheme === "dark") {
+          applyTheme("light");
+        } else {
+          applyTheme("system");
+        }
+      });
+    }
+
     const chartContainer = document.getElementById("chart-container");
     const chart = LightweightCharts.createChart(chartContainer, {
       autoSize: true,
@@ -1680,8 +3432,71 @@
       },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#2a2e39" },
-      timeScale: { borderColor: "#2a2e39", timeVisible: true, secondsVisible: false },
+      timeScale: {
+        borderColor: "#2a2e39",
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time, tickMarkType) => {
+          const d = typeof time === "number" ? new Date(time * 1000) : new Date(time);
+          if (tickMarkType === 3 || tickMarkType === 4) {
+            // Intraday hours & minutes in IST (Asia/Kolkata)
+            return new Intl.DateTimeFormat("en-IN", {
+              timeZone: "Asia/Kolkata",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            }).format(d);
+          } else if (tickMarkType === 2) {
+            // Day of month
+            return new Intl.DateTimeFormat("en-IN", {
+              timeZone: "Asia/Kolkata",
+              day: "numeric",
+              month: "short",
+            }).format(d);
+          } else if (tickMarkType === 1) {
+            // Month
+            return new Intl.DateTimeFormat("en-IN", {
+              timeZone: "Asia/Kolkata",
+              month: "short",
+            }).format(d);
+          } else if (tickMarkType === 0) {
+            // Year
+            return new Intl.DateTimeFormat("en-IN", {
+              timeZone: "Asia/Kolkata",
+              year: "numeric",
+            }).format(d);
+          }
+          return new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            day: "numeric",
+            month: "short",
+          }).format(d);
+        },
+      },
+      localization: {
+        locale: "en-IN",
+        dateFormat: "dd MMM yyyy",
+        timeFormatter: (time) => {
+          const d = typeof time === "number" ? new Date(time * 1000) : new Date(time);
+          const tPart = new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(d);
+          const dPart = new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(d);
+          return `${dPart} ${tPart} IST`;
+        },
+      },
     });
+
+    // Apply active theme to chart on startup
+    applyTheme(currentTheme, false);
 
     const candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
       upColor: "#22c55e",
@@ -1716,7 +3531,21 @@
       const chg = bar.changePct !== undefined ? bar.changePct : (((bar.close - bar.open) / (bar.open || 1)) * 100);
       const chgStr = `${chg >= 0 ? "+" : ""}${Number(chg).toFixed(2)}%`;
 
+      let timeLabel = "";
+      if (bar.time) {
+        const d = typeof bar.time === "number" ? new Date(bar.time * 1000) : new Date(bar.time);
+        const isIntraday = currentTf && !["1d", "1wk", "1mo"].includes(currentTf);
+        timeLabel = new Intl.DateTimeFormat("en-IN", {
+          timeZone: "Asia/Kolkata",
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          ...(isIntraday ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+        }).format(d);
+      }
+
       document.getElementById("legend-ohlc").innerHTML = `
+        ${timeLabel ? `<span style="color:var(--text-muted); font-size:11.5px; margin-right:4px;"><b>${timeLabel} IST</b></span>` : ""}
         <span><b>O</b> <span style="color:${color}">${bar.open.toFixed(2)}</span></span>
         <span><b>H</b> <span style="color:${color}">${bar.high.toFixed(2)}</span></span>
         <span><b>L</b> <span style="color:${color}">${bar.low.toFixed(2)}</span></span>
@@ -1896,10 +3725,10 @@
         tslNow: null,
         levels: [
           { planKey: "entry", price: entry, color: "#3b82f6", title: `ENTRY ${f(entry)}` },
-          { planKey: "sl",    price: sl,    color: "#ef4444", title: `SL ${f(sl)} (${pct(sl)})` },
-          { planKey: "t1",    price: t1,    color: "#86efac", title: `T1 ${f(t1)} (${pct(t1)} · ${r(t1)})` },
-          { planKey: "t2",    price: t2,    color: "#4ade80", title: `T2 ${f(t2)} (${pct(t2)} · ${r(t2)})`, excludeFromAutoScale: true },
-          { planKey: "t3",    price: t3,    color: "#22c55e", title: `T3 ${f(t3)} (${pct(t3)} · ${r(t3)})`, excludeFromAutoScale: true }
+          { planKey: "sl", price: sl, color: "#ef4444", title: `SL ${f(sl)} (${pct(sl)})` },
+          { planKey: "t1", price: t1, color: "#86efac", title: `T1 ${f(t1)} (${pct(t1)} · ${r(t1)})` },
+          { planKey: "t2", price: t2, color: "#4ade80", title: `T2 ${f(t2)} (${pct(t2)} · ${r(t2)})`, excludeFromAutoScale: true },
+          { planKey: "t3", price: t3, color: "#22c55e", title: `T3 ${f(t3)} (${pct(t3)} · ${r(t3)})`, excludeFromAutoScale: true }
         ]
       };
     }
@@ -1934,11 +3763,11 @@
       const f = n => n.toFixed(2);
       const parts = [];
       if (planVisibility.entry) parts.push(`<span style="color:#3b82f6">Entry ${f(t.entry)}</span>`);
-      if (planVisibility.sl)    parts.push(`<span style="color:#ef4444">SL ${f(t.sl)}</span>`);
-      if (planVisibility.t1)    parts.push(`<span style="color:#86efac">T1 ${f(t.t1)}</span>`);
-      if (planVisibility.t2)    parts.push(`<span style="color:#4ade80">T2 ${f(t.t2)}</span>`);
-      if (planVisibility.t3)    parts.push(`<span style="color:#22c55e">T3 ${f(t.t3)}</span>`);
-      if (planVisibility.tsl)   parts.push(`<span style="color:#f59e0b">TSL ${t.tslNow ? f(t.tslNow) : "–"}</span>`);
+      if (planVisibility.sl) parts.push(`<span style="color:#ef4444">SL ${f(t.sl)}</span>`);
+      if (planVisibility.t1) parts.push(`<span style="color:#86efac">T1 ${f(t.t1)}</span>`);
+      if (planVisibility.t2) parts.push(`<span style="color:#4ade80">T2 ${f(t.t2)}</span>`);
+      if (planVisibility.t3) parts.push(`<span style="color:#22c55e">T3 ${f(t.t3)}</span>`);
+      if (planVisibility.tsl) parts.push(`<span style="color:#f59e0b">TSL ${t.tslNow ? f(t.tslNow) : "–"}</span>`);
       if (!parts.length) {
         el.innerHTML = `<span style="color:var(--text-muted); font-weight:400;">Trade plan levels hidden</span>`;
         return;
@@ -2301,14 +4130,31 @@
 
     document.getElementById("load-symbol-btn").addEventListener("click", triggerSymbolLoad);
 
-    document.querySelectorAll("#tf-buttons button").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll("#tf-buttons button").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        currentTf = btn.dataset.tf;
-        currentTfLabel = btn.dataset.label;
-        loadChartData(true);
+    const tfDropdownBtn = document.getElementById("tf-dropdown-btn");
+    const tfDropdownPop = document.getElementById("tf-dropdown-popover");
+    const tfActiveLabel = document.getElementById("tf-active-label");
+
+    if (tfDropdownBtn && tfDropdownPop) {
+      tfDropdownBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = tfDropdownPop.classList.contains("open");
+        closeAllTopPopovers();
+        if (!isOpen) tfDropdownPop.classList.add("open");
       });
+    }
+
+    function setTimeframe(tf, label) {
+      currentTf = tf;
+      currentTfLabel = label || tf;
+      if (tfActiveLabel) tfActiveLabel.textContent = `⏱ ${currentTfLabel}`;
+      if (tfDropdownPop) tfDropdownPop.classList.remove("open");
+      document.querySelectorAll(".tf-quick-btn").forEach(b => b.classList.toggle("active", b.dataset.tf === tf));
+      document.querySelectorAll(".tf-select-option").forEach(b => b.classList.toggle("active", b.dataset.tf === tf));
+      loadChartData(true);
+    }
+
+    document.querySelectorAll(".tf-quick-btn, .tf-select-option").forEach(btn => {
+      btn.addEventListener("click", () => setTimeframe(btn.dataset.tf, btn.dataset.label));
     });
 
     ["chk-sr", "chk-smc", "chk-tl", "chk-vol", "chk-cup-latest"].forEach(id => {
@@ -2327,12 +4173,7 @@
 
       currentSymbol = config.symbol;
       symbolInput.value = config.symbol;
-      currentTf = config.tf;
-      currentTfLabel = config.tf === "1wk" ? "W" : "D";
-
-      document.querySelectorAll("#tf-buttons button").forEach(b => {
-        b.classList.toggle("active", b.dataset.tf === currentTf);
-      });
+      setTimeframe(config.tf, config.tf === "1wk" ? "W" : "D");
 
       activeScanSegments = [];
 
@@ -2910,6 +4751,984 @@
       }
     });
 
+    // =========================================================================
+    // 4. STRATEGY BACKTESTER CONTROLLER
+    // =========================================================================
+    const btModal = document.getElementById("backtest-modal");
+    const btPresetSelect = document.getElementById("bt-preset-select");
+    const btSingleStockInput = document.getElementById("bt-single-stock-input");
+    const btSymbolsInput = document.getElementById("bt-symbols-input");
+    const btSymbolsWrap = document.getElementById("bt-symbols-wrap");
+    const btUniverseBadge = document.getElementById("bt-universe-badge");
+    const btControlsPanel = document.getElementById("bt-controls-panel");
+    const btSummaryStrip = document.getElementById("bt-summary-strip");
+    const btStripText = document.getElementById("bt-strip-text");
+    const btStripEditBtn = document.getElementById("bt-strip-edit-btn");
+    const btStripRerunBtn = document.getElementById("bt-strip-rerun-btn");
+    const btToggleConfigBtn = document.getElementById("bt-toggle-config-btn");
+    const runBtBtn = document.getElementById("run-backtest-btn");
+    const btStatusEl = document.getElementById("bt-status");
+    const btResultsBody = document.getElementById("bt-results-body");
+    const btKpiGrid = document.getElementById("bt-kpi-grid");
+
+    let btRawTrades = [];
+    let btFilteredTrades = [];
+    let btCurrentPage = 1;
+
+    function setBtConfigExpanded(expanded) {
+      if (expanded) {
+        btControlsPanel.style.display = "flex";
+        btSummaryStrip.style.display = "none";
+        if (btToggleConfigBtn) btToggleConfigBtn.textContent = "⚙️ Hide Config ▴";
+      } else {
+        btControlsPanel.style.display = "none";
+        btSummaryStrip.style.display = "flex";
+        if (btToggleConfigBtn) btToggleConfigBtn.textContent = "⚙️ Show Config ▾";
+      }
+    }
+
+    if (btToggleConfigBtn) {
+      btToggleConfigBtn.addEventListener("click", () => {
+        const isCollapsed = btControlsPanel.style.display === "none";
+        setBtConfigExpanded(isCollapsed);
+      });
+    }
+
+    if (btStripEditBtn) {
+      btStripEditBtn.addEventListener("click", () => setBtConfigExpanded(true));
+    }
+
+    if (btStripRerunBtn) {
+      btStripRerunBtn.addEventListener("click", () => runBtBtn.click());
+    }
+
+    function syncBtUniverseUI() {
+      const val = btPresetSelect.value;
+      if (val === "single") {
+        btSingleStockInput.style.display = "inline-block";
+        if (!btSingleStockInput.value) {
+          btSingleStockInput.value = (currentSymbol || "RELIANCE.NS").replace(".NS", "");
+        }
+        btSymbolsWrap.style.display = "none";
+        btUniverseBadge.innerHTML = `<span style="color:#38bdf8; font-weight:600;">Single Stock Mode</span> (enter ticker)`;
+      } else if (val === "current") {
+        btSingleStockInput.style.display = "inline-block";
+        btSingleStockInput.value = currentSymbol;
+        btSymbolsWrap.style.display = "none";
+        btUniverseBadge.innerHTML = `Active Chart: <b style="color:#38bdf8;">${currentSymbol}</b>`;
+      } else if (val === "custom") {
+        btSingleStockInput.style.display = "none";
+        btSymbolsWrap.style.display = "block";
+        btUniverseBadge.innerHTML = `Custom Tickers • <a href="javascript:void(0)" id="bt-toggle-symbols-link" style="color:#60a5fa; text-decoration:none;">Hide Tickers ▴</a>`;
+        attachSymbolsToggle();
+      } else {
+        btSingleStockInput.style.display = "none";
+        btSymbolsWrap.style.display = "none";
+        const basket = INDEX_BASKETS[val] || [];
+        btSymbolsInput.value = basket.join(", ");
+        const count = basket.length;
+        btUniverseBadge.innerHTML = `${count} stocks loaded • <a href="javascript:void(0)" id="bt-toggle-symbols-link" style="color:#60a5fa; text-decoration:none;">Edit Tickers ▾</a>`;
+        attachSymbolsToggle();
+      }
+    }
+
+    function attachSymbolsToggle() {
+      const link = document.getElementById("bt-toggle-symbols-link");
+      if (!link) return;
+      link.onclick = (e) => {
+        e.preventDefault();
+        const isHidden = btSymbolsWrap.style.display === "none";
+        btSymbolsWrap.style.display = isHidden ? "block" : "none";
+        link.textContent = isHidden ? "Hide Tickers ▴" : "Edit Tickers ▾";
+      };
+    }
+
+    btPresetSelect.addEventListener("change", syncBtUniverseUI);
+    // Initial sync
+    syncBtUniverseUI();
+
+    function openBacktestModal() {
+      scannersPop.classList.remove("open");
+      const key = btPresetSelect.value;
+      if (key === "current") {
+        btSingleStockInput.value = currentSymbol;
+      }
+      syncBtUniverseUI();
+      btModal.classList.add("open");
+    }
+
+    document.getElementById("menu-open-backtest").addEventListener("click", openBacktestModal);
+    document.getElementById("btn-top-backtest").addEventListener("click", openBacktestModal);
+    document.getElementById("close-backtest-btn").addEventListener("click", () => {
+      if (btModal.classList.contains("docked")) undockScanner("backtest-modal");
+      btModal.classList.remove("open");
+    });
+
+    function applyBtFiltersAndRender(resetPage = false) {
+      if (resetPage) btCurrentPage = 1;
+      const symQuery = document.getElementById("bt-filter-symbol").value.trim().toUpperCase();
+      const outcome = document.getElementById("bt-filter-outcome").value;
+      const reason = document.getElementById("bt-filter-reason").value;
+
+      btFilteredTrades = btRawTrades.filter(t => {
+        if (symQuery && !t.Symbol.includes(symQuery)) return false;
+        if (outcome === "WIN" && t["PnL (Rs)"] <= 0) return false;
+        if (outcome === "LOSS" && t["PnL (Rs)"] >= 0) return false;
+        if (reason !== "ALL" && t["Exit Reason"] !== reason) return false;
+        return true;
+      });
+
+      renderBtTable();
+    }
+
+    function renderBtTable() {
+      const pageSize = parseInt(document.getElementById("bt-page-size").value, 10);
+      const total = btFilteredTrades.length;
+      const maxPages = Math.max(1, Math.ceil(total / pageSize));
+      if (btCurrentPage > maxPages) btCurrentPage = maxPages;
+
+      const start = (btCurrentPage - 1) * pageSize;
+      const paged = btFilteredTrades.slice(start, start + pageSize);
+
+      document.getElementById("bt-page-info").textContent = `Showing ${total ? start + 1 : 0}-${Math.min(start + pageSize, total)} of ${total} trades`;
+      document.getElementById("bt-page-num").textContent = `Page ${btCurrentPage} of ${maxPages}`;
+      document.getElementById("bt-prev-page").disabled = (btCurrentPage <= 1);
+      document.getElementById("bt-next-page").disabled = (btCurrentPage >= maxPages);
+      document.getElementById("bt-export-excel").disabled = (total === 0);
+
+      if (!paged.length) {
+        btResultsBody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:var(--text-muted); padding:24px;">No trades matched active filters.</td></tr>`;
+        return;
+      }
+
+      btResultsBody.innerHTML = paged.map(t => {
+        const isWin = t["PnL (Rs)"] > 0;
+        const pnlColor = isWin ? "color:#4ade80;" : (t["PnL (Rs)"] < 0 ? "color:#f87171;" : "color:#94a3b8;");
+        const retColor = isWin ? "color:#4ade80;" : (t["PnL (Rs)"] < 0 ? "color:#f87171;" : "color:#94a3b8;");
+        const rColor = isWin ? "color:#4ade80;" : (t["PnL (Rs)"] < 0 ? "color:#f87171;" : "color:#94a3b8;");
+        let reasonBadge = `<span class="pill-status" style="background:rgba(148,163,184,0.2); color:#94a3b8; border:1px solid rgba(148,163,184,0.4);">${t["Exit Reason"] || "CLOSED"}</span>`;
+        if (t["Exit Reason"] === "TARGET_2") {
+          reasonBadge = `<span class="pill-status pill-BREAKOUT">TARGET 2</span>`;
+        } else if (t["Exit Reason"] === "TARGET_1") {
+          reasonBadge = `<span class="pill-status" style="background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(34,197,94,0.4);">TARGET 1</span>`;
+        } else if (t["Exit Reason"] === "STOP_LOSS") {
+          reasonBadge = `<span class="pill-status" style="background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.4);">STOP LOSS</span>`;
+        } else if (t["Exit Reason"] === "TIME_STOP") {
+          reasonBadge = `<span class="pill-status" style="background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4);">TIME STOP</span>`;
+        } else if (t["Exit Reason"] === "END_OF_DATA") {
+          reasonBadge = `<span class="pill-status" style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);">OPEN (END)</span>`;
+        }
+
+        return `
+          <tr class="scan-hit-row" data-symbol="${t.Symbol}" title="Click to view ${t.Symbol} on chart">
+            <td style="color:var(--text-muted);">${t["Trade ID"]}</td>
+            <td><a href="javascript:void(0)" class="sym-link">${t.Symbol}</a></td>
+            <td style="font-weight:600; color:#e2e8f0;">${t.Pattern || t.Strategy}</td>
+            <td><span class="pill-status pill-MID">${t.Direction}</span></td>
+            <td style="font-size:11px; color:var(--text-muted);">${t["Entry Date"]}</td>
+            <td style="font-weight:600;">₹${Number(t["Entry Price"]).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td style="font-size:11px; color:var(--text-muted);">${t["Exit Date"]}</td>
+            <td style="font-weight:600;">₹${Number(t["Exit Price"]).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td>${reasonBadge}</td>
+            <td style="font-weight:700; ${pnlColor}">₹${Number(t["PnL (Rs)"]).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td style="font-weight:700; ${retColor}">${t["Return (%)"] > 0 ? "+" : ""}${t["Return (%)"]}%</td>
+            <td style="font-weight:700; ${rColor}">${t["R-Multiple"] > 0 ? "+" : ""}${t["R-Multiple"]}R</td>
+            <td style="color:var(--text-muted); font-size:11px;">${t["Holding Bars"]} b</td>
+          </tr>
+        `;
+      }).join("");
+
+      btResultsBody.querySelectorAll("tr.scan-hit-row").forEach(row => {
+        row.addEventListener("click", () => {
+          const sym = row.getAttribute("data-symbol");
+          if (!sym) return;
+          symbolInput.value = sym;
+          loadChartData(true);
+        });
+      });
+    }
+
+    document.getElementById("bt-filter-symbol").addEventListener("input", () => applyBtFiltersAndRender(true));
+    document.getElementById("bt-filter-outcome").addEventListener("change", () => applyBtFiltersAndRender(true));
+    document.getElementById("bt-filter-reason").addEventListener("change", () => applyBtFiltersAndRender(true));
+    document.getElementById("bt-page-size").addEventListener("change", () => applyBtFiltersAndRender(true));
+    document.getElementById("bt-prev-page").addEventListener("click", () => {
+      if (btCurrentPage > 1) { btCurrentPage--; renderBtTable(); }
+    });
+    document.getElementById("bt-next-page").addEventListener("click", () => {
+      btCurrentPage++;
+      renderBtTable();
+    });
+    document.getElementById("bt-reset-filters").addEventListener("click", () => {
+      document.getElementById("bt-filter-symbol").value = "";
+      document.getElementById("bt-filter-outcome").value = "ALL";
+      document.getElementById("bt-filter-reason").value = "ALL";
+      applyBtFiltersAndRender(true);
+    });
+
+    document.getElementById("bt-export-excel").addEventListener("click", () => {
+      if (!btFilteredTrades.length) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const strat = document.getElementById("bt-strategy-select").value;
+      const headers = Object.keys(btFilteredTrades[0]);
+      const rows = btFilteredTrades.map(t => Object.values(t));
+      downloadExcelCSV(`Backtest_${strat}_${today}.csv`, headers, rows);
+    });
+
+    runBtBtn.addEventListener("click", async () => {
+      const preset = btPresetSelect.value;
+      let raw = [];
+      if (preset === "single" || preset === "current") {
+        let sym = btSingleStockInput.value.trim().toUpperCase();
+        if (!sym) sym = currentSymbol;
+        if (!sym.endsWith(".NS") && !sym.startsWith("^")) sym += ".NS";
+        raw = [sym];
+      } else {
+        raw = btSymbolsInput.value.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+      }
+
+      const strategy = document.getElementById("bt-strategy-select").value;
+      const scanTf = document.getElementById("bt-tf-select").value;
+      const period = document.getElementById("bt-period-select").value;
+      const capital = parseFloat(document.getElementById("bt-capital-input").value) || 1000000;
+      const risk = parseFloat(document.getElementById("bt-risk-input").value) || 1.0;
+      const maxTrades = parseInt(document.getElementById("bt-max-trades-input").value, 10) || 5;
+      const friction = parseFloat(document.getElementById("bt-friction-input").value) || 0.15;
+
+      if (!raw.length) {
+        btStatusEl.textContent = "Please enter or select at least 1 symbol.";
+        return;
+      }
+
+      runBtBtn.disabled = true;
+      if (btStripRerunBtn) btStripRerunBtn.disabled = true;
+      btStatusEl.textContent = `Running backtest for ${raw.length === 1 ? raw[0] : raw.length + ' stocks'} (${period})...`;
+      btResultsBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:28px; color:#38bdf8;">Simulating ${strategy.toUpperCase()} strategy on historical bars...</td></tr>`;
+
+      try {
+        const res = await fetch("/api/backtest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            strategy: strategy,
+            symbols: raw,
+            period: period,
+            tf: scanTf,
+            capital: capital,
+            risk: risk,
+            maxTrades: maxTrades,
+            friction: friction
+          })
+        });
+
+        if (!res.ok) {
+          btStatusEl.textContent = `HTTP ${res.status} Error`;
+          btResultsBody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:#ef4444; padding:24px;">Server returned HTTP ${res.status}. Check console logs.</td></tr>`;
+          return;
+        }
+
+        const data = await res.json();
+        if (data.error) { btStatusEl.textContent = data.error; return; }
+
+        btRawTrades = data.trades || [];
+        const stats = data.stats || {};
+
+        // Update KPI Summary Grid
+        btKpiGrid.style.display = "grid";
+        const netProfit = Number(stats["Net Profit (Rs)"] || 0);
+        const netEl = document.getElementById("kpi-net-profit");
+        netEl.textContent = `₹ ${netProfit.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        netEl.className = "bt-kpi-val " + (netProfit >= 0 ? "bt-positive" : "bt-negative");
+
+        const retPct = stats["Return on Capital (%)"] || 0;
+        document.getElementById("kpi-return-pct").textContent = `${retPct > 0 ? "+" : ""}${retPct}%`;
+
+        document.getElementById("kpi-win-rate").textContent = `${stats["Win Rate (%)"] || 0}%`;
+        document.getElementById("kpi-win-loss-count").textContent = `${stats["Winning Trades"] || 0}W / ${stats["Losing Trades"] || 0}L`;
+
+        document.getElementById("kpi-profit-factor").textContent = `${stats["Profit Factor"] || 0}`;
+        document.getElementById("kpi-payoff").textContent = `Payoff: ${stats["Win/Loss Payoff Ratio"] || 0}x`;
+
+        const maxDDPct = Math.abs(Number(stats["Max Drawdown (%)"] || 0)).toFixed(2);
+        document.getElementById("kpi-max-dd").textContent = `-${maxDDPct}%`;
+        const ddAmount = Number(stats["Max Drawdown (Rs)"] || 0);
+        document.getElementById("kpi-dd-amount").textContent = `₹ ${ddAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        document.getElementById("kpi-expectancy").textContent = `${stats["Average R-Multiple"] || 0} R`;
+        document.getElementById("kpi-expectancy-cash").textContent = `₹ ${Math.round(stats["Expectancy per Trade (Rs)"] || 0)} / trade`;
+
+        document.getElementById("kpi-total-trades").textContent = `${stats["Total Trades"] || 0}`;
+        document.getElementById("kpi-sharpe").textContent = `Sharpe: ${stats["Sharpe Ratio"] || 0}`;
+
+        btStatusEl.textContent = `Finished • ${data.processedCount}/${data.scannedCount} processed • ${btRawTrades.length} trades (${data.scannedAt})`;
+
+        // Auto-collapse config panel into summary strip so results table gets maximum room
+        const stratSelect = document.getElementById("bt-strategy-select");
+        const stratName = stratSelect.options[stratSelect.selectedIndex]?.text || strategy;
+        const targetLabel = raw.length === 1 ? raw[0] : (BASKET_LABELS[preset] || `${raw.length} stocks`);
+        btStripText.textContent = `${stratName} • ${targetLabel} • ${scanTf.toUpperCase()} • ${period.toUpperCase()} • Capital: ₹${Number(capital).toLocaleString("en-IN")} • Risk: ${risk}%`;
+        setBtConfigExpanded(false);
+
+        applyBtFiltersAndRender(true);
+      } catch (err) {
+        btStatusEl.textContent = "Backtest execution connection error";
+      } finally {
+        runBtBtn.disabled = false;
+        if (btStripRerunBtn) btStripRerunBtn.disabled = false;
+      }
+    });
+
+    // =========================================================================
+    // 5. SECTOR ROTATION & MARKET STRENGTH STUDIO CONTROLLER
+    // =========================================================================
+    const srModal = document.getElementById("sector-rotation-modal");
+    const srBenchmarkSelect = document.getElementById("sr-benchmark-select");
+    const srTfSelect = document.getElementById("sr-tf-select");
+    const srTailSelect = document.getElementById("sr-tail-select");
+    const runSrScanBtn = document.getElementById("run-sr-scan-btn");
+    const srStatusEl = document.getElementById("sr-status");
+    const rrgSvg = document.getElementById("rrg-svg");
+    const rrgTooltip = document.getElementById("rrg-tooltip");
+
+    let srRawData = null;
+    let srActiveTab = "rrg";
+    let srSelectedCat = "all";
+    let srActiveQuadrantFilter = "ALL";
+    let srSelectedGroup = null;
+    let srMoneyType = "all";
+    let srMoneyTf = "3w";
+    let srPerfType = "all";
+    let srCardsType = "theme";
+    window.__sr_controller_ready = true;
+
+    // Subtabs switcher
+    document.querySelectorAll(".sr-subtab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-subtab-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srActiveTab = btn.dataset.tab;
+
+        document.querySelectorAll(".sr-tab-pane").forEach(pane => pane.classList.remove("active"));
+        const targetPane = document.getElementById(`sr-pane-${srActiveTab}`);
+        if (targetPane) targetPane.classList.add("active");
+
+        if (srActiveTab === "rrg") {
+          renderRrgGraph();
+        } else if (srActiveTab === "cards") {
+          renderSrCards();
+        } else if (srActiveTab === "money") {
+          renderSrMoneyMovement();
+        } else if (srActiveTab === "perf") {
+          renderSrPerfCharts();
+        }
+      });
+    });
+
+    function openSectorRotationModal() {
+      scannersPop.classList.remove("open");
+      srModal.classList.add("open");
+      if (!srRawData) {
+        loadSectorRotation();
+      } else {
+        renderRrgGraph();
+        renderSrRrgTable();
+      }
+    }
+
+    document.getElementById("menu-open-sector-rotation").addEventListener("click", openSectorRotationModal);
+    document.getElementById("btn-top-sector-rotation").addEventListener("click", openSectorRotationModal);
+    document.getElementById("close-sector-rotation-btn").addEventListener("click", () => {
+      if (srModal.classList.contains("docked")) undockScanner("sector-rotation-modal");
+      srModal.classList.remove("open");
+    });
+
+    async function loadSectorRotation() {
+      const benchmark = srBenchmarkSelect.value;
+      const tf = srTfSelect.value;
+      const tail = parseInt(srTailSelect.value, 10) || 3;
+
+      runSrScanBtn.disabled = true;
+      srStatusEl.textContent = "Updating Market Strength Studio...";
+
+      try {
+        const res = await fetch(`/api/sector-rotation?benchmark=${encodeURIComponent(benchmark)}&tf=${tf}&tail=${tail}`);
+        if (!res.ok) {
+          srStatusEl.textContent = `HTTP ${res.status} Error`;
+          return;
+        }
+
+        const data = await res.json();
+        if (data.error) {
+          srStatusEl.textContent = data.error;
+          return;
+        }
+
+        srRawData = data;
+        srStatusEl.textContent = `${data.total_count} groups analyzed (${data.sectors_count} sectors, ${data.themes_count} themes) • ${data.scanned_at}`;
+
+        // Update counts in UI
+        const allEl = document.getElementById("sr-all-count");
+        const secEl = document.getElementById("sr-sec-count");
+        const thEl = document.getElementById("sr-th-count");
+        if (allEl) allEl.textContent = data.total_count || 41;
+        if (secEl) secEl.textContent = data.sectors_count || 20;
+        if (thEl) thEl.textContent = data.themes_count || 21;
+
+        const cardLead = document.getElementById("card-count-leading");
+        const cardImp = document.getElementById("card-count-improving");
+        const cardWeak = document.getElementById("card-count-weakening");
+        const cardLag = document.getElementById("card-count-lagging");
+        if (cardLead) cardLead.textContent = data.summary?.leading_count || 0;
+        if (cardImp) cardImp.textContent = data.summary?.improving_count || 0;
+        if (cardWeak) cardWeak.textContent = data.summary?.weakening_count || 0;
+        if (cardLag) cardLag.textContent = data.summary?.lagging_count || 0;
+
+        // Render Active Views
+        renderSrRrgTable();
+        renderRrgGraph();
+        renderSrCards();
+        renderSrMoneyMovement();
+        renderSrPerfCharts();
+      } catch (err) {
+        srStatusEl.textContent = "Sector rotation connection error";
+      } finally {
+        runSrScanBtn.disabled = false;
+      }
+    }
+
+    runSrScanBtn.addEventListener("click", loadSectorRotation);
+    srBenchmarkSelect.addEventListener("change", loadSectorRotation);
+    srTfSelect.addEventListener("change", loadSectorRotation);
+    srTailSelect.addEventListener("change", loadSectorRotation);
+
+    // Category pills in Tab 1
+    document.querySelectorAll(".sr-cat-pill").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-cat-pill").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srSelectedCat = btn.dataset.cat;
+        renderSrRrgTable();
+        renderRrgGraph();
+      });
+    });
+
+    // Quadrant filter pills in Tab 1
+    document.querySelectorAll(".sr-filter-q-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-filter-q-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srActiveQuadrantFilter = btn.dataset.quadrant;
+        renderRrgGraph();
+        renderSrRrgTable();
+      });
+    });
+
+    const toggleTrailsChk = document.getElementById("sr-toggle-trails");
+    if (toggleTrailsChk) {
+      toggleTrailsChk.addEventListener("change", () => renderRrgGraph());
+    }
+
+    // Helper: get groups based on selected category
+    function getActiveGroups() {
+      if (!srRawData) return [];
+      if (srSelectedCat === "sector") return srRawData.sectors || [];
+      if (srSelectedCat === "theme") return srRawData.themes || [];
+      return srRawData.all_groups || [];
+    }
+
+    // Tab 1: Render Left Sidebar Grouped Table
+    function renderSrRrgTable() {
+      const scrollEl = document.getElementById("sr-table-scroll");
+      if (!scrollEl || !srRawData) return;
+
+      const groups = getActiveGroups();
+      const quadrants = [
+        { key: "LEADING", label: "• Leading", color: "#22c55e" },
+        { key: "IMPROVING", label: "• Improving", color: "#38bdf8" },
+        { key: "WEAKENING", label: "• Weakening", color: "#f59e0b" },
+        { key: "LAGGING", label: "• Lagging", color: "#ef4444" }
+      ];
+
+      let html = "";
+      quadrants.forEach(q => {
+        if (srActiveQuadrantFilter !== "ALL" && srActiveQuadrantFilter !== q.key) return;
+
+        const inQuad = groups.filter(g => g.quadrant === q.key);
+        if (!inQuad.length) return;
+
+        html += `
+          <div class="sr-quadrant-group-header" style="color:${q.color};">
+            <span>${q.label}</span>
+            <span style="font-size:10px; opacity:0.8;">(${inQuad.length})</span>
+          </div>
+        `;
+
+        inQuad.forEach(g => {
+          const isSel = srSelectedGroup === g.name;
+          const selClass = isSel ? " selected" : "";
+          const ret1mCol = g.ret_1m >= 0 ? "color:#4ade80;" : "color:#f87171;";
+          const ret3mCol = g.ret_3m >= 0 ? "color:#4ade80;" : "color:#f87171;";
+          const ret6mCol = g.ret_6m >= 0 ? "color:#4ade80;" : "color:#f87171;";
+          const deltaCol = g.delta_rs >= 0 ? "color:#4ade80;" : "color:#f87171;";
+          const tagBg = g.type === "theme" ? "background:rgba(168,85,247,0.18); color:#c084fc;" : "background:rgba(56,189,248,0.18); color:#38bdf8;";
+
+          html += `
+            <div class="sr-item-row${selClass}" data-group="${g.name}" title="Click to highlight ${g.name} on RRG graph">
+              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px;">
+                <span style="font-weight:600; color:var(--text-main); font-size:11.5px; overflow:hidden; text-overflow:ellipsis;">${g.name}</span>
+                <span style="font-size:9px; padding:1px 4px; border-radius:3px; ${tagBg}">${g.type}</span>
+              </div>
+              <div style="text-align:center;">
+                <span class="sr-rs-pill" style="background:${g.rs_rating >= 70 ? '#16a34a' : (g.rs_rating >= 50 ? '#ca8a04' : '#dc2626')};">${g.rs_rating}</span>
+              </div>
+              <div style="text-align:right; font-weight:600; font-size:11px; ${ret1mCol}">${g.ret_1m >= 0 ? "+" : ""}${g.ret_1m}%</div>
+              <div style="text-align:right; font-weight:600; font-size:11px; ${ret3mCol}">${g.ret_3m >= 0 ? "+" : ""}${g.ret_3m}%</div>
+              <div style="text-align:right; font-weight:600; font-size:11px; ${ret6mCol}">${g.ret_6m >= 0 ? "+" : ""}${g.ret_6m}%</div>
+              <div style="text-align:right; font-weight:700; font-size:11px; ${deltaCol}">${g.delta_rs >= 0 ? "+" : ""}${g.delta_rs}</div>
+            </div>
+          `;
+        });
+      });
+
+      scrollEl.innerHTML = html || `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:11.5px;">No groups match active filter.</div>`;
+
+      scrollEl.querySelectorAll(".sr-item-row").forEach(row => {
+        row.addEventListener("click", () => {
+          const grp = row.dataset.group;
+          srSelectedGroup = (srSelectedGroup === grp) ? null : grp;
+          renderSrRrgTable();
+          renderRrgGraph();
+        });
+      });
+    }
+
+    // Tab 1: Render SVG Relative Rotation Graph (RRG)
+    function renderRrgGraph() {
+      if (!rrgSvg || !srRawData) return;
+
+      let groups = getActiveGroups();
+      if (srActiveQuadrantFilter !== "ALL") {
+        groups = groups.filter(g => g.quadrant === srActiveQuadrantFilter);
+      }
+
+      const svgW = 760;
+      const svgH = 480;
+      const padL = 52;
+      const padR = 52;
+      const padT = 36;
+      const padB = 46;
+      const plotW = svgW - padL - padR;
+      const plotH = svgH - padT - padB;
+
+      const isLight = document.documentElement.getAttribute("data-theme") === "light" ||
+        (document.documentElement.getAttribute("data-theme") === "system" && !isSystemDark());
+
+      const crosshairColor = isLight ? "#94a3b8" : "#475569";
+      const axisTextColor = isLight ? "#475569" : "#94a3b8";
+      const quadrantLeadingBg = isLight ? "rgba(34, 197, 94, 0.05)" : "rgba(34, 197, 94, 0.08)";
+      const quadrantImprovingBg = isLight ? "rgba(56, 189, 248, 0.05)" : "rgba(56, 189, 248, 0.08)";
+      const quadrantWeakeningBg = isLight ? "rgba(245, 158, 11, 0.05)" : "rgba(245, 158, 11, 0.08)";
+      const quadrantLaggingBg = isLight ? "rgba(239, 68, 68, 0.05)" : "rgba(239, 68, 68, 0.08)";
+
+      // Max absolute deviations for Strength (X) and Momentum (Y)
+      let maxAbsX = 8.0;
+      let maxAbsY = 8.0;
+      groups.forEach(g => {
+        maxAbsX = Math.max(maxAbsX, Math.abs(g.x || 0));
+        maxAbsY = Math.max(maxAbsY, Math.abs(g.y || 0));
+        (g.tail || []).forEach(pt => {
+          maxAbsX = Math.max(maxAbsX, Math.abs(pt.x || 0));
+          maxAbsY = Math.max(maxAbsY, Math.abs(pt.y || 0));
+        });
+      });
+      maxAbsX = Math.ceil(maxAbsX * 1.15);
+      maxAbsY = Math.ceil(maxAbsY * 1.15);
+
+      function scaleX(val) {
+        return padL + ((val - (-maxAbsX)) / (maxAbsX * 2)) * plotW;
+      }
+      function scaleY(val) {
+        return padT + ((maxAbsY - val) / (maxAbsY * 2)) * plotH;
+      }
+
+      const midX = scaleX(0.0);
+      const midY = scaleY(0.0);
+
+      const showTrails = toggleTrailsChk ? toggleTrailsChk.checked : true;
+
+      let svgHtml = `
+        <!-- Quadrant Shaded Zones -->
+        <!-- Top-Right: LEADING -->
+        <rect x="${midX}" y="${padT}" width="${padL + plotW - midX}" height="${midY - padT}" fill="${quadrantLeadingBg}" />
+        <!-- Top-Left: IMPROVING -->
+        <rect x="${padL}" y="${padT}" width="${midX - padL}" height="${midY - padT}" fill="${quadrantImprovingBg}" />
+        <!-- Bottom-Right: WEAKENING -->
+        <rect x="${midX}" y="${midY}" width="${padL + plotW - midX}" height="${padT + plotH - midY}" fill="${quadrantWeakeningBg}" />
+        <!-- Bottom-Left: LAGGING -->
+        <rect x="${padL}" y="${midY}" width="${midX - padL}" height="${padT + plotH - midY}" fill="${quadrantLaggingBg}" />
+
+        <!-- Quadrant Watermark Labels -->
+        <text x="${padL + plotW - 14}" y="${padT + 20}" text-anchor="end" font-size="12" font-weight="700" fill="#22c55e" opacity="0.9">Leading ↗</text>
+        <text x="${padL + 14}" y="${padT + 20}" text-anchor="start" font-size="12" font-weight="700" fill="#38bdf8" opacity="0.9">↖ Improving</text>
+        <text x="${padL + plotW - 14}" y="${padT + plotH - 14}" text-anchor="end" font-size="12" font-weight="700" fill="#f59e0b" opacity="0.9">Weakening ↘</text>
+        <text x="${padL + 14}" y="${padT + plotH - 14}" text-anchor="start" font-size="12" font-weight="700" fill="#ef4444" opacity="0.9">↙ Lagging</text>
+
+        <!-- Outer Boundary -->
+        <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="none" stroke="${isLight ? '#cbd5e1' : '#334155'}" stroke-width="1" />
+
+        <!-- Center Crosshair Lines (0, 0) -->
+        <line x1="${padL}" y1="${midY}" x2="${padL + plotW}" y2="${midY}" stroke="${crosshairColor}" stroke-width="1.2" stroke-dasharray="3,3" />
+        <line x1="${midX}" y1="${padT}" x2="${midX}" y2="${padT + plotH}" stroke="${crosshairColor}" stroke-width="1.2" stroke-dasharray="3,3" />
+
+        <!-- Center Origin Marker -->
+        <circle cx="${midX}" cy="${midY}" r="3" fill="${crosshairColor}" />
+
+        <!-- Axis Labels -->
+        <text x="${padL + plotW / 2}" y="${svgH - 12}" text-anchor="middle" font-size="11" font-weight="600" fill="${axisTextColor}">Strength → median excess return vs Nifty 500, 3 months (%)</text>
+        <text x="16" y="${padT + plotH / 2}" text-anchor="middle" font-size="11" font-weight="600" fill="${axisTextColor}" transform="rotate(-90 16 ${padT + plotH / 2})">Momentum → RS rating change, 1 month</text>
+      `;
+
+      // Plot nodes with trails
+      groups.forEach(g => {
+        const isSel = srSelectedGroup === g.name;
+        const pts = (g.tail || []).map(p => ({ x: scaleX(p.x), y: scaleY(p.y), raw: p }));
+        const head = { x: scaleX(g.x), y: scaleY(g.y) };
+        const opacity = srSelectedGroup ? (isSel ? "1.0" : "0.2") : "0.88";
+        const strokeW = isSel ? "3" : "1.8";
+
+        svgHtml += `<g class="sr-group-svg-node" data-group="${g.name}" style="cursor:pointer;" opacity="${opacity}">`;
+
+        // Render Trail
+        if (showTrails && pts.length >= 2) {
+          const polyPts = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+          svgHtml += `<polyline points="${polyPts}" fill="none" stroke="${g.color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="0.65" />`;
+          pts.forEach((p, idx) => {
+            if (idx < pts.length - 1) {
+              svgHtml += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="${g.color}" opacity="0.4" />`;
+            }
+          });
+        }
+
+        // Head Node Icon (Diamond or Circle based on quadrant)
+        const nodeColor = g.quadrant === "LEADING" ? "#22c55e" : (g.quadrant === "IMPROVING" ? "#38bdf8" : (g.quadrant === "WEAKENING" ? "#f59e0b" : "#ef4444"));
+        const r = isSel ? 7 : 5.5;
+
+        if (g.quadrant === "LEADING" || g.quadrant === "WEAKENING") {
+          // Diamond shape
+          svgHtml += `<polygon points="${head.x},${head.y - r} ${head.x + r},${head.y} ${head.x},${head.y + r} ${head.x - r},${head.y}" fill="${nodeColor}" stroke="${isLight ? '#ffffff' : '#0b0e14'}" stroke-width="1.5" />`;
+        } else {
+          // Circle shape
+          svgHtml += `<circle cx="${head.x.toFixed(1)}" cy="${head.y.toFixed(1)}" r="${r}" fill="${nodeColor}" stroke="${isLight ? '#ffffff' : '#0b0e14'}" stroke-width="1.5" />`;
+        }
+
+        // Label beside node
+        svgHtml += `
+          <text x="${(head.x + 8).toFixed(1)}" y="${(head.y + 3.5).toFixed(1)}" fill="${isLight ? '#0f172a' : '#f8fafc'}" font-size="10" font-weight="${isSel ? '700' : '600'}" style="paint-order:stroke; stroke:${isLight ? '#ffffff' : '#0b0e14'}; stroke-width:3px; stroke-linejoin:round;">${g.short_name}</text>
+        </g>`;
+      });
+
+      rrgSvg.innerHTML = svgHtml;
+
+      // Tooltip and click interactions on SVG nodes
+      rrgSvg.querySelectorAll(".sr-group-svg-node").forEach(el => {
+        const grpName = el.dataset.group;
+        const g = groups.find(item => item.name === grpName);
+        if (!g) return;
+
+        el.addEventListener("mouseenter", (e) => {
+          const rect = rrgSvg.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+
+          rrgTooltip.style.display = "block";
+          rrgTooltip.style.left = `${Math.min(mouseX + 12, rect.width - 250)}px`;
+          rrgTooltip.style.top = `${Math.min(mouseY + 8, rect.height - 130)}px`;
+          rrgTooltip.innerHTML = `
+            <div style="font-weight:700; color:${g.color}; font-size:12.5px;">${g.name} (${g.type.toUpperCase()})</div>
+            <div style="margin:2px 0; font-size:11px;">Quadrant: <b class="pill-status pill-${g.quadrant}">${g.quadrant}</b></div>
+            <div style="font-size:11px;">Strength (3M): <b>${g.x}%</b> | Momentum (1M ΔRS): <b>${g.y > 0 ? '+' : ''}${g.y}</b></div>
+            <div style="font-size:11px;">RS Rating: <b>${g.rs_rating}/99</b> | 1M: <b>${g.ret_1m}%</b> | 3M: <b>${g.ret_3m}%</b></div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Top Stocks: ${g.top_stocks.map(s => `${s.name} (${s.rs})`).join(', ')}</div>
+          `;
+        });
+
+        el.addEventListener("mousemove", (e) => {
+          const rect = rrgSvg.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          rrgTooltip.style.left = `${Math.min(mouseX + 12, rect.width - 250)}px`;
+          rrgTooltip.style.top = `${Math.min(mouseY + 8, rect.height - 130)}px`;
+        });
+
+        el.addEventListener("mouseleave", () => {
+          rrgTooltip.style.display = "none";
+        });
+
+        el.addEventListener("click", () => {
+          srSelectedGroup = (srSelectedGroup === grpName) ? null : grpName;
+          renderRrgGraph();
+          renderSrRrgTable();
+        });
+      });
+    }
+
+    // Tab 2: Strongest Cards Grid (Images 4 & 5)
+    const cardsTypeSelect = document.getElementById("sr-cards-type-select");
+    if (cardsTypeSelect) {
+      cardsTypeSelect.addEventListener("change", () => {
+        srCardsType = cardsTypeSelect.value;
+        renderSrCards();
+      });
+    }
+
+    document.querySelectorAll(".sr-card-q-chk").forEach(chk => {
+      chk.addEventListener("change", () => renderSrCards());
+    });
+
+    const cardFilterAll = document.getElementById("sr-card-filter-all");
+    if (cardFilterAll) {
+      cardFilterAll.addEventListener("change", () => {
+        const checked = cardFilterAll.checked;
+        document.querySelectorAll(".sr-card-q-chk").forEach(c => c.checked = checked);
+        renderSrCards();
+      });
+    }
+
+    function renderSrCards() {
+      const gridEl = document.getElementById("sr-cards-grid");
+      if (!gridEl || !srRawData) return;
+
+      let list = [];
+      if (srCardsType === "sector") list = srRawData.sectors || [];
+      else if (srCardsType === "theme") list = srRawData.themes || [];
+      else list = srRawData.all_groups || [];
+
+      // Filter by checked quadrants
+      const allowedQuads = Array.from(document.querySelectorAll(".sr-card-q-chk:checked")).map(c => c.value);
+      const filtered = list.filter(item => allowedQuads.includes(item.quadrant));
+
+      if (!filtered.length) {
+        gridEl.innerHTML = `<div style="grid-column: 1 / -1; padding:32px; text-align:center; color:var(--text-muted); font-size:12px;">No cards match selected quadrant filters.</div>`;
+        return;
+      }
+
+      gridEl.innerHTML = filtered.map(item => {
+        const quadClass = item.quadrant === "LEADING" ? "card-leading" : (item.quadrant === "IMPROVING" ? "card-improving" : (item.quadrant === "WEAKENING" ? "card-weakening" : "card-lagging"));
+        const changeIcon = item.rank_change > 0 ? `▲${item.rank_change}` : (item.rank_change < 0 ? `▼${Math.abs(item.rank_change)}` : "0");
+        const changeCol = item.rank_change > 0 ? "color:#22c55e;" : (item.rank_change < 0 ? "color:#ef4444;" : "color:var(--text-muted);");
+
+        const stockBadges = (item.top_stocks || []).map(s => {
+          return `<a href="javascript:void(0)" class="sr-stock-tag" data-sym="${s.symbol}" title="Plot ${s.name} on chart">${s.name} <b>${s.rs}</b></a>`;
+        }).join("");
+
+        return `
+          <div class="sr-card ${quadClass}">
+            <div class="sr-card-title">
+              <span>#${item.rank} <span style="${changeCol}; font-size:11px; margin-left:3px;">${changeIcon}</span> ${item.name}</span>
+            </div>
+            <div class="sr-card-desc">${item.desc || ""}</div>
+            <div class="sr-card-stats">
+              <div>
+                <div class="sr-card-stat-title">Score</div>
+                <div class="sr-card-stat-val">${item.score}</div>
+              </div>
+              <div>
+                <div class="sr-card-stat-title">Median RS</div>
+                <div class="sr-card-stat-val">${item.median_rs} <span style="font-size:10px; color:${item.delta_rs >= 0 ? '#22c55e' : '#ef4444'};">${item.delta_rs >= 0 ? '▲' : '▼'}${Math.abs(item.delta_rs)}</span></div>
+              </div>
+              <div>
+                <div class="sr-card-stat-title">Adv / Dec</div>
+                <div class="sr-card-stat-val"><span style="color:#22c55e;">${item.adv_count}</span> / <span style="color:#ef4444;">${item.dec_count}</span></div>
+              </div>
+            </div>
+            <div class="sr-card-stocks">
+              ${stockBadges}
+              <button class="pill-btn sr-plot-chart-btn" data-sym="${item.constituents[0] || '^NSEI'}" style="font-size:10px; padding:2px 6px; margin-left:auto;" title="Open chart">Chart ↗</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Bind stock clicks
+      gridEl.querySelectorAll(".sr-stock-tag, .sr-plot-chart-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const sym = btn.dataset.sym;
+          if (!sym) return;
+          symbolInput.value = sym;
+          loadChartData(true);
+        });
+      });
+    }
+
+    // Tab 3: Where Money is Moving (Image 2)
+    document.querySelectorAll(".sr-money-filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-money-filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srMoneyType = btn.dataset.type;
+        renderSrMoneyMovement();
+      });
+    });
+
+    document.querySelectorAll(".sr-money-tf-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-money-tf-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srMoneyTf = btn.dataset.tf;
+        const rangeEl = document.getElementById("sr-money-range");
+        if (rangeEl) rangeEl.textContent = `Shift over ${srMoneyTf.toUpperCase()}`;
+        renderSrMoneyMovement();
+      });
+    });
+
+    function renderSrMoneyMovement() {
+      const climList = document.getElementById("sr-climbers-list");
+      const fallList = document.getElementById("sr-fallers-list");
+      if (!climList || !fallList || !srRawData) return;
+
+      const climbers = (srRawData.climbers && srRawData.climbers[srMoneyType]) || [];
+      const fallers = (srRawData.fallers && srRawData.fallers[srMoneyType]) || [];
+
+      climList.innerHTML = climbers.map(c => `
+        <div class="sr-money-row">
+          <span style="color:var(--text-main);">${c.name}</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:var(--text-muted);">#${c.prev_rank} → <b>#${c.rank}</b></span>
+            <span style="font-weight:700; color:#22c55e; min-width:32px; text-align:right;">▲${c.rank_change}</span>
+          </div>
+        </div>
+      `).join("") || `<div style="padding:16px; color:var(--text-muted); font-size:11.5px;">No climbers recorded.</div>`;
+
+      fallList.innerHTML = fallers.map(f => `
+        <div class="sr-money-row">
+          <span style="color:var(--text-main);">${f.name}</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:var(--text-muted);">#${f.prev_rank} → <b>#${f.rank}</b></span>
+            <span style="font-weight:700; color:#ef4444; min-width:32px; text-align:right;">▼${Math.abs(f.rank_change)}</span>
+          </div>
+        </div>
+      `).join("") || `<div style="padding:16px; color:var(--text-muted); font-size:11.5px;">No fallers recorded.</div>`;
+    }
+
+    // Tab 4: Group Performance Comparative Line Charts (Image 3)
+    document.querySelectorAll(".sr-perf-filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sr-perf-filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        srPerfType = btn.dataset.type;
+        renderSrPerfCharts();
+      });
+    });
+
+    function renderSrPerfCharts() {
+      if (!srRawData) return;
+
+      let list = [];
+      if (srPerfType === "sectors") list = srRawData.sectors || [];
+      else if (srPerfType === "themes") list = srRawData.themes || [];
+      else list = srRawData.all_groups || [];
+
+      // Update leaders banner
+      const leaders = srRawData.performance_leaders;
+      const ribbonText = document.getElementById("sr-perf-ribbon-text");
+      if (ribbonText && leaders) {
+        ribbonText.textContent = `${leaders.day.name} leads the day (+${leaders.day.ret}%) · ${leaders.week.name} week (+${leaders.week.ret}%) · ${leaders.month.name} month (+${leaders.month.ret}%)`;
+      }
+
+      // Draw Chart 1: 1 WEEK
+      renderSingleComparativeLineChart("sr-line-chart-1w", list, "ret_1w", "sparkline_1w", "1 WEEK");
+      // Draw Chart 2: 1 MONTH
+      renderSingleComparativeLineChart("sr-line-chart-1m", list, "ret_1m", "sparkline_1m", "1 MONTH");
+      // Draw Chart 3: 3 MONTHS
+      renderSingleComparativeLineChart("sr-line-chart-3m", list, "ret_3m", "sparkline_3m", "3 MONTHS");
+    }
+
+    function renderSingleComparativeLineChart(svgId, list, retKey, sparkKey, title) {
+      const svg = document.getElementById(svgId);
+      if (!svg || !list.length) return;
+
+      const sorted = [...list].sort((a, b) => b[retKey] - a[retKey]);
+      const top3 = sorted.slice(0, 3);
+      const bottom3 = sorted.slice(-3).reverse();
+      const plotItems = [...top3, ...bottom3];
+
+      const svgW = 360;
+      const svgH = 260;
+      const padL = 38;
+      const padR = 85;
+      const padT = 24;
+      const padB = 28;
+      const pW = svgW - padL - padR;
+      const pH = svgH - padT - padB;
+
+      // Find min and max returns
+      let minRet = -3.0;
+      let maxRet = 4.0;
+      plotItems.forEach(item => {
+        (item[sparkKey] || []).forEach(v => {
+          minRet = Math.min(minRet, v);
+          maxRet = Math.max(maxRet, v);
+        });
+      });
+      maxRet = Math.ceil(maxRet * 1.1);
+      minRet = Math.floor(minRet * 1.1);
+      if (maxRet === minRet) { maxRet += 2; minRet -= 2; }
+
+      function scaleX(idx, total) {
+        return padL + (idx / Math.max(1, total - 1)) * pW;
+      }
+      function scaleY(val) {
+        return padT + ((maxRet - val) / (maxRet - minRet)) * pH;
+      }
+
+      const zeroY = scaleY(0.0);
+      const isLight = document.documentElement.getAttribute("data-theme") === "light" ||
+        (document.documentElement.getAttribute("data-theme") === "system" && !isSystemDark());
+
+      let html = `
+        <!-- Zero baseline -->
+        <line x1="${padL}" y1="${zeroY}" x2="${padL + pW}" y2="${zeroY}" stroke="${isLight ? '#94a3b8' : '#475569'}" stroke-width="1.2" stroke-dasharray="3,3" />
+        <text x="${padL - 4}" y="${zeroY + 3}" text-anchor="end" font-size="9" fill="${isLight ? '#64748b' : '#94a3b8'}">0.0%</text>
+
+        <!-- Top & Bottom Grid labels -->
+        <text x="${padL - 4}" y="${padT + 8}" text-anchor="end" font-size="9" fill="${isLight ? '#64748b' : '#94a3b8'}">+${maxRet}%</text>
+        <text x="${padL - 4}" y="${padT + pH}" text-anchor="end" font-size="9" fill="${isLight ? '#64748b' : '#94a3b8'}">${minRet}%</text>
+      `;
+
+      // Palette: top 3 green/blue/purple, bottom 3 red/orange/amber
+      const colors = ["#22c55e", "#38bdf8", "#a855f7", "#ef4444", "#f97316", "#eab308"];
+
+      plotItems.forEach((item, idx) => {
+        const series = item[sparkKey] || [0, item[retKey]];
+        const color = colors[idx] || item.color;
+        const pts = series.map((val, sIdx) => ({ x: scaleX(sIdx, series.length), y: scaleY(val) }));
+        const polyStr = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+        const lastPt = pts[pts.length - 1];
+
+        html += `
+          <polyline points="${polyStr}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="${lastPt.x.toFixed(1)}" cy="${lastPt.y.toFixed(1)}" r="3" fill="${color}" />
+          <text x="${(lastPt.x + 5).toFixed(1)}" y="${(lastPt.y + 3).toFixed(1)}" font-size="9.5" font-weight="700" fill="${color}">
+            ${item[retKey] >= 0 ? '+' : ''}${item[retKey]}% ${item.short_name}
+          </text>
+        `;
+      });
+
+      svg.innerHTML = html;
+    }
+
+    // Export CSV of all active groups
+    document.getElementById("sr-export-excel").addEventListener("click", () => {
+      if (!srRawData || !srRawData.all_groups) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const headers = ["Name", "Type", "Quadrant", "RS Rating", "Score", "Median RS", "1M (%)", "3M (%)", "6M (%)", "Δ RS", "Adv/Dec", "Constituents"];
+      const rows = srRawData.all_groups.map(g => [
+        g.name, g.type, g.quadrant, g.rs_rating, g.score, g.median_rs, g.ret_1m, g.ret_3m, g.ret_6m, g.delta_rs, `${g.adv_count}/${g.dec_count}`, g.constituents.join("; ")
+      ]);
+      downloadExcelCSV(`Market_Strength_Studio_${today}.csv`, headers, rows);
+    });
+
     // Left Toolbar Manual Canvas Drawing Engine
     const canvas = document.getElementById("draw-canvas");
     const ctx = canvas.getContext("2d");
@@ -2967,9 +5786,9 @@
       });
     }
 
-    document.querySelectorAll(".tool-btn[data-tool]").forEach(btn => {
+    document. querySelectorAll(".tool-btn[data-tool]").forEach(btn => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".tool-btn[data-tool]").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tool-btn[data-tool]").forEach(b => b.classLisremtive"));
         btn.classList.add("active");
         activeTool = btn.dataset.tool;
         canvas.classList.toggle("drawing-active", activeTool !== "cursor");
@@ -3056,11 +5875,11 @@
       if (!dockResizer.classList.contains("dragging")) return;
       dockResizer.classList.remove("dragging");
       document.body.classList.remove("resizing-dock");
-      try { dockResizer.releasePointerCapture(e.pointerId); } catch (err) {}
-      try { localStorage.setItem("scannerDockW", String(preferredDockW)); } catch (err) {}
+      try { dockResizer.releasePointerCapture(e.pointerId); } catch (err) { }
+      try { localStorage.setItem("scannerDockW", String(preferredDockW)); } catch (err) { }
     }
     dockResizer.addEventListener("pointerup", endDockDrag);
-    dockResizer.addEventListener("pointercancel", endDockDrag);
+    dockResizer.addEventListener("pointercanl",kDrag);
 
     loadChartData(true);
     setInterval(() => {
@@ -3070,4 +5889,5 @@
     }, 60000);
   </script>
 </body>
+
 </html>

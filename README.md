@@ -33,6 +33,14 @@ python app.py
 ```
 *The terminal will start and **automatically launch your default web browser** to `http://127.0.0.1:5000`.*
 
+### 4. Interactive Backtesting (Web UI & CLI)
+* **Web UI (Recommended):** Click **🧪 Backtest** in the top bar to configure strategies, index baskets, capital, and risk management directly in your browser with real-time KPI metrics, click-to-chart trade inspection, and Excel export.
+* **CLI Engine (Optional):**
+  ```bash
+  # Backtest Cup & Handle breakouts across Nifty 50 over 3 years
+  python backtester.py --strategy cup_handle --basket nifty50 --period 3y
+  ```
+
 ---
 
 ## Table of Contents in [Readme Version 1.1.md](file:///d:/Personal/PriceAction/Readme%20Version%201.1.md)
@@ -53,6 +61,7 @@ python app.py
    - Weekly HL / LL & Reversal Forecast Scanner
    - Dockable Scanner Panel & Excel Export
 7. Supported Chart Patterns (14 Formations)
-8. Multi-Tier Market Data Pipeline & Architecture
-9. Configuration & Customization
-10. Troubleshooting & Frequently Asked Questions
+8. Historical Backtesting Engine (`backtester.py`)
+9. Multi-Tier Market Data Pipeline & Architecture
+10. Configuration & Customization
+11. Troubleshooting & Frequently Asked Questions

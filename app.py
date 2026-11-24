@@ -8,12 +8,19 @@ import webbrowser
 import urllib.request
 import urllib.parse
 import http.cookiejar
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+IST = timezone(timedelta(hours=5, minutes=30))
 from flask import Flask, render_template, request, jsonify
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from pattern_detector import analyze_dataframe, detect_all_patterns, find_pivots, evaluate_weekly_hl_ll, evaluate_multiyear_breakout
+from pattern_detector import (
+    analyze_dataframe,
+    detect_all_patterns,
+    find_pivots,
+    evaluate_weekly_hl_ll,
+    evaluate_multiyear_breakout,
+)
 
 try:
     from curl_cffi import requests as cffi_requests
@@ -533,17 +540,19 @@ def chart_data():
         analysis = analyze_dataframe(df, tf)
 
         for p in analysis["patterns"]:
-            dt_start = datetime.fromtimestamp(p["startTime"], tz=timezone.utc)
-            dt_end = datetime.fromtimestamp(p["endTime"], tz=timezone.utc)
+            dt_start = datetime.fromtimestamp(p["startTime"], tz=IST)
+            dt_end = datetime.fromtimestamp(p["endTime"], tz=IST)
             fmt = "%Y-%m-%d" if tf in ("1d", "1wk", "1mo") else "%Y-%m-%d %H:%M"
-            p["dateLabel"] = f"{dt_start.strftime(fmt)} → {dt_end.strftime(fmt)}"
+            suffix = "" if tf in ("1d", "1wk", "1mo") else " IST"
+            p["dateLabel"] = f"{dt_start.strftime(fmt)} → {dt_end.strftime(fmt)}{suffix}"
 
         payload = {
             "symbol": symbol,
             "timeframe": tf,
+            "timezone": "IST",
             "candles": candles,
             "analysis": analysis,
-            "updatedAt": datetime.now().strftime("%H:%M:%S"),
+            "updatedAt": datetime.now(IST).strftime("%H:%M:%S IST"),
             "source": "live"
         }
 
@@ -602,7 +611,7 @@ def scan_cup_handle():
             "matchesCount": len(results),
             "timeframe": tf,
             "results": results,
-            "scannedAt": datetime.now().strftime("%H:%M:%S")
+            "scannedAt": datetime.now(IST).strftime("%H:%M:%S IST")
         })
     except Exception as e:
         return jsonify({"error": f"Batch scan error: {str(e)}"}), 500
@@ -646,7 +655,7 @@ def scan_weekly_structure():
             "scannedCount": len(symbols),
             "matchesCount": len(results),
             "results": results,
-            "scannedAt": datetime.now().strftime("%H:%M:%S")
+            "scannedAt": datetime.now(IST).strftime("%H:%M:%S IST")
         })
     except Exception as e:
         return jsonify({"error": f"Weekly scan error: {str(e)}"}), 500
@@ -691,10 +700,112 @@ def scan_multiyear_breakout():
             "matchesCount": len(results),
             "horizon": "ATH" if years == 0 else f"{years}Y",
             "results": results,
-            "scannedAt": datetime.now().strftime("%H:%M:%S")
+            "scannedAt": datetime.now(IST).strftime("%H:%M:%S IST")
         })
     except Exception as e:
         return jsonify({"error": f"Multi-year scan error: {str(e)}"}), 500
+
+
+@app.route("/api/backtest", methods=["POST"])
+def run_backtest_api():
+    body = request.get_json(silent=True) or {}
+    strategy = body.get("strategy", "cup_handle")
+    raw_symbols = body.get("symbols", [])
+    period = body.get("period", "3y")
+    tf = body.get("tf", "1d")
+    capital = float(body.get("capital", 1000000.0))
+    risk_pct = float(body.get("risk", 1.0))
+    max_trades = int(body.get("maxTrades", 5))
+    friction_pct = float(body.get("friction", 0.15))
+
+    symbols = []
+    for s in raw_symbols:
+        sym = str(s).strip().upper()
+        if not sym:
+            continue
+        if not sym.startswith("^") and "." not in sym and "-" not in sym:
+            sym = f"{sym}.NS"
+        if sym not in symbols:
+            symbols.append(sym)
+
+    if not symbols:
+        return jsonify({"error": "No valid symbols provided for backtest."}), 400
+
+    try:
+        from backtester import BacktestEngine
+        engine = BacktestEngine(
+            strategy=strategy,
+            initial_capital=capital,
+            risk_per_trade_pct=risk_pct,
+            max_open_trades=max_trades,
+            friction_pct=friction_pct / 100.0,
+            max_holding_bars=35 if tf == "1d" else 15,
+        )
+
+        if len(symbols) == 1:
+            sym = symbols[0]
+            norm_df = fetch_ohlcv(sym, tf)
+            if not norm_df.empty:
+                df_map = {sym: norm_df}
+            else:
+                df_map = _fetch_batch_ohlcv_map(symbols, period=period, interval=tf)
+        else:
+            df_map = _fetch_batch_ohlcv_map(symbols, period=period, interval=tf)
+
+        processed = 0
+        if len(df_map) == 1:
+            sym, norm_df = next(iter(df_map.items()))
+            if norm_df is not None and not norm_df.empty:
+                engine.run_on_dataframe(sym, norm_df, tf)
+                processed = 1
+        else:
+            engine.run_portfolio(df_map, tf)
+            processed = len([k for k, v in df_map.items() if v is not None and not v.empty])
+
+        stats = engine.calculate_statistics()
+        trades = [t.to_dict() for t in engine.trades]
+        # Sort trades by entry date descending
+        trades.sort(key=lambda x: str(x.get("Entry Date", "")), reverse=True)
+
+        return jsonify({
+            "scannedCount": len(symbols),
+            "processedCount": processed,
+            "strategy": strategy,
+            "timeframe": tf,
+            "period": period,
+            "stats": stats,
+            "trades": trades,
+            "scannedAt": datetime.now(IST).strftime("%H:%M:%S IST")
+        })
+    except Exception as e:
+        return jsonify({"error": f"Backtest execution error: {str(e)}"}), 500
+
+
+@app.route("/api/sector-rotation", methods=["GET", "POST"])
+def api_sector_rotation():
+    """
+    RRG Sector Rotation & Market Strength Matrix API endpoint.
+    Returns RS-Ratio, RS-Momentum, Directional Tails, Multi-timeframe performance,
+    and Market Breadth across all NSE Sectors vs Benchmark.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        benchmark = request.args.get("benchmark") or data.get("benchmark") or "^NSEI"
+        timeframe = request.args.get("tf") or data.get("tf") or "1wk"
+        tail_length = int(request.args.get("tail") or data.get("tail") or 8)
+
+        from sector_rotation import get_sector_rotation_matrix
+        results = get_sector_rotation_matrix(
+            benchmark=benchmark,
+            timeframe=timeframe,
+            tail_length=tail_length,
+            df_provider=_fetch_batch_ohlcv_map
+        )
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": f"Sector rotation error: {str(e)}"}), 500
+
+
 
 def open_browser(port=5000):
     """Wait for Flask server to bind to the port and launch the default web browser."""
