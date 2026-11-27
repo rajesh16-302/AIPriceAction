@@ -4,4 +4,5 @@ __pycache__/
 venv/
 .env
 backtest_results/
+sector_rotation_cache.json
 

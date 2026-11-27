@@ -20,6 +20,8 @@ from pattern_detector import (
     find_pivots,
     evaluate_weekly_hl_ll,
     evaluate_multiyear_breakout,
+    evaluate_swing_leader_3r,
+    evaluate_pro_swing_setup,
 )
 
 try:
@@ -706,6 +708,279 @@ def scan_multiyear_breakout():
         return jsonify({"error": f"Multi-year scan error: {str(e)}"}), 500
 
 
+@app.route("/api/scan-swing-leader", methods=["POST"])
+def scan_swing_leader():
+    """
+    4-6W Swing Leader (1:3 RR) Scanner:
+    Stage 2 Trend + Leading/Improving Sector RS + C&H (80% Cheat/100%) or Bull Flag + Volume.
+    """
+    body = request.get_json(silent=True) or {}
+    raw_symbols = body.get("symbols", [])
+    leading_only = bool(body.get("leadingOnly", False))
+
+    symbols = []
+    for s in raw_symbols:
+        sym = str(s).strip().upper()
+        if not sym:
+            continue
+        if not sym.startswith("^") and "." not in sym and "-" not in sym:
+            sym = f"{sym}.NS"
+        if sym not in symbols:
+            symbols.append(sym)
+
+    if not symbols:
+        return jsonify({"error": "No valid symbols provided."}), 400
+
+    try:
+        # 1. Determine Leading / Improving sector constituents
+        leading_symbols = set()
+        try:
+            from sector_rotation import get_sector_rotation_matrix
+            sr_data = get_sector_rotation_matrix(df_provider=_fetch_batch_ohlcv_map)
+            for g in sr_data.get("all_groups", []):
+                if g.get("quadrant") in ("LEADING", "IMPROVING"):
+                    for c in g.get("constituents", []):
+                        leading_symbols.add(c)
+        except Exception:
+            pass
+
+        # 2. Check Nifty 50 20/50 EMA Market Regime
+        market_regime = "UNKNOWN"
+        try:
+            nifty_df = fetch_ohlcv("^NSEI", "1d")
+            if nifty_df is not None and len(nifty_df) >= 50:
+                n_close = float(nifty_df["close"].iloc[-1])
+                n_ema20 = float(nifty_df["close"].ewm(span=20, adjust=False).mean().iloc[-1])
+                n_ema50 = float(nifty_df["close"].ewm(span=50, adjust=False).mean().iloc[-1])
+                market_regime = "BULLISH (Nifty > 20/50 EMA)" if (n_close >= n_ema20 and n_ema20 >= n_ema50) else "CAUTION (Nifty < 20/50 EMA)"
+        except Exception:
+            pass
+
+        # 3. Scan basket on 1Y Daily OHLCV
+        df_map = _fetch_batch_ohlcv_map(symbols, period="1y", interval="1d")
+        results = []
+        for sym, norm_df in df_map.items():
+            try:
+                hit = evaluate_swing_leader_3r(sym, norm_df, leading_symbols=leading_symbols)
+                if hit:
+                    if leading_only and not hit["sectorAligned"]:
+                        continue
+                    results.append(hit)
+            except Exception:
+                continue
+
+        results.sort(key=lambda r: (not r["sectorAligned"], -r["relVol"]))
+        return jsonify({
+            "scannedCount": len(symbols),
+            "matchesCount": len(results),
+            "marketRegime": market_regime,
+            "results": results,
+            "scannedAt": datetime.now(IST).strftime("%H:%M:%S IST"),
+        })
+    except Exception as e:
+        return jsonify({"error": f"Swing leader scan error: {str(e)}"}), 500
+
+
+@app.route("/api/scan-pro-swing", methods=["POST"])
+def scan_pro_swing():
+    """
+    Industry-Grade Swing Setup Scanner:
+    Short VCP / Bull Flag + 21 EMA Pullback / Pocket Pivot
+    (20 EMA > 50 EMA uptrends + Leading/Improving Sectors + RS >= 75 + ATR Stops).
+    """
+    body = request.get_json(silent=True) or {}
+    raw_symbols = body.get("symbols", [])
+    min_rs = float(body.get("minRs", 70))
+    min_turnover = float(body.get("minTurnover", 10))
+    max_stop_pct = float(body.get("maxStopPct", 8))
+    leading_only = bool(body.get("leadingOnly", True))
+
+    symbols = []
+    for s in raw_symbols:
+        sym = str(s).strip().upper()
+        if not sym:
+            continue
+        if not sym.startswith("^") and "." not in sym and "-" not in sym:
+            sym = f"{sym}.NS"
+        if sym not in symbols:
+            symbols.append(sym)
+
+    if not symbols:
+        return jsonify({"error": "No valid symbols provided."}), 400
+
+    try:
+        # 1. Sector RRG map from Sector Rotation Studio (Leading & Improving included)
+        sym_to_rrg = {}
+        leading_symbols = set()
+        quad_priority = {"LEADING": 4, "IMPROVING": 3, "WEAKENING": 2, "LAGGING": 1}
+        try:
+            from sector_rotation import get_sector_rotation_matrix
+            sr_data = get_sector_rotation_matrix(df_provider=_fetch_batch_ohlcv_map)
+            for g in sr_data.get("all_groups", []):
+                quad = g.get("quadrant", "LAGGING")
+                prio = quad_priority.get(quad, 0)
+                is_lead = quad in ("LEADING", "IMPROVING")
+                info = {
+                    "sectorName": g.get("short_name") or g.get("name") or "",
+                    "rrgQuadrant": quad,
+                    "rrgX": round(float(g.get("x", 0.0)), 1),
+                    "rrgY": round(float(g.get("y", 0.0)), 1),
+                    "sectorRs": int(round(float(g.get("rs_rating", 50)))),
+                    "prio": prio,
+                }
+                for c in g.get("constituents", []):
+                    if is_lead:
+                        leading_symbols.add(c)
+                    prev = sym_to_rrg.get(c)
+                    if not prev or prio > prev["prio"]:
+                        sym_to_rrg[c] = info
+        except Exception:
+            pass
+
+        # 2. Nifty 50 Regime Gate (20 EMA & 50 EMA)
+        regime_info = {
+            "status": "RISK-ON",
+            "text": "Market regime: RISK-ON · Nifty 50 > 20/50 EMA · trade normal size",
+        }
+        try:
+            nifty_df = fetch_ohlcv("^NSEI", "1d")
+            if nifty_df is not None and len(nifty_df) >= 50:
+                n_close = round(float(nifty_df["close"].iloc[-1]), 2)
+                n_ema20 = round(float(nifty_df["close"].ewm(span=20, adjust=False).mean().iloc[-1]), 2)
+                n_ema50 = round(float(nifty_df["close"].ewm(span=50, adjust=False).mean().iloc[-1]), 2)
+                if n_close >= n_ema20 and n_ema20 >= n_ema50:
+                    regime_info = {
+                        "status": "RISK-ON",
+                        "text": f"Market regime: RISK-ON · Nifty 50 {n_close:,.2f} vs 50 EMA {n_ema50:,.2f} (20 EMA {n_ema20:,.2f}) · trade normal size",
+                    }
+                elif n_close >= n_ema50:
+                    regime_info = {
+                        "status": "CAUTION",
+                        "text": f"Market regime: CAUTION · Nifty 50 {n_close:,.2f} vs 50 EMA {n_ema50:,.2f} · trade half size / A+ only",
+                    }
+                else:
+                    regime_info = {
+                        "status": "RISK-OFF",
+                        "text": f"Market regime: RISK-OFF · Nifty 50 {n_close:,.2f} below 50 EMA {n_ema50:,.2f} · preserve capital",
+                    }
+        except Exception:
+            pass
+
+        # 3. Fetch 1Y daily OHLCV for basket & compute cross-sectional RS Ratings (1-99)
+        df_map = _fetch_batch_ohlcv_map(symbols, period="1y", interval="1d")
+        raw_rs_scores = {}
+        for sym, sdf in df_map.items():
+            if sdf is None or len(sdf) < 55:
+                continue
+            c = sdf["close"].values.astype(float)
+            n_len = len(c)
+            def _ret(lb):
+                p = c[max(0, n_len - 1 - lb)]
+                return ((c[-1] / p) - 1.0) * 100.0 if p > 0 else 0.0
+            raw_rs_scores[sym] = 0.40 * _ret(63) + 0.25 * _ret(126) + 0.20 * _ret(21) + 0.15 * _ret(250)
+
+        rs_ratings = {}
+        if raw_rs_scores:
+            ranks = pd.Series(raw_rs_scores).rank(pct=True, method="average") * 98.0 + 1.0
+            rs_ratings = {s: float(v) for s, v in ranks.items()}
+
+        # 4. Evaluate all symbols
+        all_records = []
+        for sym, sdf in df_map.items():
+            try:
+                is_lead = sym in leading_symbols
+                if leading_only and leading_symbols and not is_lead:
+                    continue
+                rs_val = rs_ratings.get(sym, 50.0)
+                rrg_info = sym_to_rrg.get(sym, {})
+                recs = evaluate_pro_swing_setup(
+                    sym,
+                    sdf,
+                    rs_rating=rs_val,
+                    sector_aligned=is_lead,
+                    sector_name=rrg_info.get("sectorName", ""),
+                    min_rs=min_rs,
+                    min_turnover_cr=min_turnover,
+                    max_stop_pct=max_stop_pct,
+                )
+                if recs:
+                    for rec in recs:
+                        rec["rrgQuadrant"] = rrg_info.get("rrgQuadrant", "")
+                        rec["rrgX"] = rrg_info.get("rrgX")
+                        rec["rrgY"] = rrg_info.get("rrgY")
+                        rec["sectorRs"] = rrg_info.get("sectorRs")
+                    all_records.extend(recs)
+            except Exception:
+                continue
+
+        all_records.sort(key=lambda r: (-r["conviction"], -r["rs"], r["stopPct"]))
+
+        # 5. Fetch & cache Yahoo Finance next earnings/results date ONLY for matched symbols
+        now_ist = datetime.now(IST)
+        today_date = now_ist.date()
+        matched_syms = sorted({r["symbol"] for r in all_records})
+
+        if not hasattr(app, "_earnings_cache"):
+            app._earnings_cache = {}
+
+        def _get_days_to_results(sym: str):
+            cached = app._earnings_cache.get(sym)
+            now_ts = time.time()
+            if cached and (now_ts - cached[0]) < 43200:  # 12h cache
+                return cached[1], cached[2]
+            days_val, date_str = None, None
+            try:
+                cal = yf.Ticker(sym).calendar
+                ed = None
+                if isinstance(cal, dict):
+                    ed = cal.get("Earnings Date")
+                elif hasattr(cal, "loc") and "Earnings Date" in cal.index:
+                    ed = cal.loc["Earnings Date"].values
+                if isinstance(ed, (list, tuple, np.ndarray)) and len(ed) > 0:
+                    ed = ed[0]
+                if ed is not None:
+                    dt_ed = pd.to_datetime(ed).date()
+                    diff_days = (dt_ed - today_date).days
+                    if diff_days >= 0:
+                        days_val = int(diff_days)
+                        date_str = dt_ed.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+            app._earnings_cache[sym] = (now_ts, days_val, date_str)
+            return days_val, date_str
+
+        if matched_syms:
+            from concurrent.futures import ThreadPoolExecutor
+            results_map = {}
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futs = {pool.submit(_get_days_to_results, s): s for s in matched_syms}
+                for fut, s in futs.items():
+                    try:
+                        results_map[s] = fut.result(timeout=4)
+                    except Exception:
+                        results_map[s] = (None, None)
+            for r in all_records:
+                d_val, d_str = results_map.get(r["symbol"], (None, None))
+                r["daysToResults"] = d_val
+                r["nextResultsDate"] = d_str
+
+        is_weekday = now_ist.weekday() < 5
+        hm = now_ist.hour * 100 + now_ist.minute
+        is_market_open = bool(is_weekday and 915 <= hm < 1530)
+
+        return jsonify({
+            "scannedCount": len(df_map),
+            "totalRequested": len(symbols),
+            "matchesCount": len(all_records),
+            "regime": regime_info,
+            "isMarketOpen": is_market_open,
+            "results": all_records,
+            "scannedAt": now_ist.strftime("%H:%M:%S IST"),
+        })
+    except Exception as e:
+        return jsonify({"error": f"Pro Swing scan error: {str(e)}"}), 500
+
+
 @app.route("/api/backtest", methods=["POST"])
 def run_backtest_api():
     body = request.get_json(silent=True) or {}
@@ -793,13 +1068,15 @@ def api_sector_rotation():
         benchmark = request.args.get("benchmark") or data.get("benchmark") or "^NSEI"
         timeframe = request.args.get("tf") or data.get("tf") or "1wk"
         tail_length = int(request.args.get("tail") or data.get("tail") or 8)
+        force = (request.args.get("force") == "1") or bool(data.get("force", False))
 
         from sector_rotation import get_sector_rotation_matrix
         results = get_sector_rotation_matrix(
             benchmark=benchmark,
             timeframe=timeframe,
             tail_length=tail_length,
-            df_provider=_fetch_batch_ohlcv_map
+            df_provider=_fetch_batch_ohlcv_map,
+            force=force
         )
         return jsonify(results)
     except Exception as e:

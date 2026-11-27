@@ -830,3 +830,355 @@ def evaluate_multiyear_breakout(symbol: str, df: pd.DataFrame, years: int = 3):
         "startTime": int(times[peak_idx]),
         "endTime": int(times[-1])
     }
+
+
+def evaluate_swing_leader_3r(symbol: str, df: pd.DataFrame, leading_symbols: set = None):
+    """
+    4-6 Week Swing Leader 1:3 RR Strategy:
+    Combines Stage 2 Trend Template + Leading/Improving Sector RS + High-Asymmetry
+    Cup & Handle (80% Mid Cheat / 100% Rim Breakout) or Bull Flag setups with
+    volume expansion, tight stop-loss (<= 6.5%), and Hybrid 1.5R / 3.0R exits.
+    """
+    if df is None or df.empty or len(df) < 60:
+        return None
+
+    closes = df["close"].values
+    highs = df["high"].values
+    lows = df["low"].values
+    volumes = df["volume"].values
+    times = df["time"].values
+    n = len(df)
+
+    cmp = float(closes[-1])
+    if cmp < 10.0:
+        return None
+
+    # 1. Stage 2 Trend Template Filter (20 EMA & 50 EMA)
+    close_s = pd.Series(closes)
+    ema20_s = close_s.ewm(span=20, adjust=False).mean()
+    ema21_s = close_s.ewm(span=21, adjust=False).mean()
+    ema50_s = close_s.ewm(span=50, adjust=False).mean()
+
+    ema20 = float(ema20_s.iloc[-1])
+    ema21 = float(ema21_s.iloc[-1])
+    ema50 = float(ema50_s.iloc[-1])
+    ema20_prev = float(ema20_s.iloc[-8]) if n >= 28 else ema20
+    ema50_prev = float(ema50_s.iloc[-10]) if n >= 60 else ema50
+
+    if cmp < ema20 or ema20 < ema20_prev * 0.995:
+        return None
+    if ema20 < ema50 * 0.995 or ema50 < ema50_prev * 0.995:
+        return None
+
+    # 2. Leadership Proximity: within 20% of 52-week high
+    lookback_52w = min(n, 252)
+    high_52w = float(np.max(highs[-lookback_52w:]))
+    if cmp < 0.80 * high_52w:
+        return None
+    dist_52w_pct = round(((cmp - high_52w) / (high_52w + 1e-9)) * 100.0, 1)
+
+    # 3. Volume Confirmation (prevent low-volume fakeouts)
+    avg_vol = float(np.mean(volumes[-21:-1])) if n > 21 else float(np.mean(volumes))
+    rel_vol = round(float(volumes[-1]) / (avg_vol + 1e-9), 2)
+    prev_rel_vol = round(float(volumes[-2]) / (avg_vol + 1e-9), 2) if n >= 2 else rel_vol
+    if max(rel_vol, prev_rel_vol) < 1.20:
+        return None
+
+    # 4. High-Asymmetry Pattern Detection (Cup & Handle 80%/100% or Bull Flag)
+    _, high_idx, low_idx = find_pivots(df, order=4)
+    patterns = detect_all_patterns(df, high_idx, low_idx)
+
+    setup_type = None
+    trigger_price = cmp
+    raw_sl = float(np.min(lows[-6:])) * 0.99
+    start_time = int(times[max(0, n - 30)])
+
+    # Priority 1: Cup & Handle (80% Mid Cheat or 100% Rim Breakout)
+    cups = [
+        p for p in patterns
+        if p["name"] == "Cup and Handle" and abs(p["endIdx"] - (n - 1)) <= 3
+    ]
+    if cups:
+        cup = cups[-1]
+        meta = cup.get("meta", {})
+        stage = meta.get("stage", "BREAKOUT (100%)")
+        if "80%" in stage or "100%" in stage:
+            breakout_p = float(meta.get("breakout", cmp))
+            mid_cheat_p = float(meta.get("midCheat", cmp))
+            handle_low = float(meta.get("handleLow", raw_sl))
+            trig = breakout_p if "100%" in stage else mid_cheat_p
+            if 0.985 * trig <= cmp <= 1.055 * trig:
+                setup_type = "C&H 100% Breakout" if "100%" in stage else "C&H 80% Mid Cheat"
+                trigger_price = round(trig, 2)
+                raw_sl = handle_low * 0.99
+                start_time = int(cup.get("startTime", start_time))
+
+    # Priority 2: Bull Flag Breakout
+    if setup_type is None:
+        flags = [
+            p for p in patterns
+            if p["name"] == "Bull Flag" and abs(p["endIdx"] - (n - 1)) <= 2
+        ]
+        if flags:
+            flag = flags[-1]
+            setup_type = "Bull Flag Breakout"
+            trigger_price = round(float(np.max(highs[max(0, n - 8):-1])) if n > 8 else cmp, 2)
+            raw_sl = float(np.min(lows[max(0, n - 6):])) * 0.99
+            start_time = int(flag.get("startTime", start_time))
+
+    if setup_type is None:
+        return None
+
+    # 5. Tight Risk & Hybrid 1:3 RR Levels
+    sl = round(max(raw_sl, cmp * 0.935), 2)  # Maximum 6.5% risk cap
+    if sl >= cmp * 0.985:
+        sl = round(cmp * 0.965, 2)  # Minimum 1.5%-3.5% breathing room
+
+    risk = max(cmp * 0.015, cmp - sl)
+    risk_pct = round((risk / cmp) * 100.0, 2)
+    target_1 = round(cmp + 1.5 * risk, 2)   # Scale 50% + move SL to breakeven
+    target_2 = round(cmp + 3.0 * risk, 2)   # 1:3 RR full target
+
+    in_leading_sector = bool(leading_symbols and symbol in leading_symbols)
+
+    return {
+        "symbol": symbol,
+        "setupType": setup_type,
+        "sectorAligned": in_leading_sector,
+        "cmp": round(cmp, 2),
+        "triggerPrice": trigger_price,
+        "stopLoss": sl,
+        "riskPct": risk_pct,
+        "target1": target_1,
+        "target2": target_2,
+        "ema20": round(ema20, 2),
+        "ema21": round(ema21, 2),
+        "ema50": round(ema50, 2),
+        "tsl21Ema": round(ema21 * 0.995, 2),
+        "tsl50Ema": round(ema50 * 0.995, 2),
+        "dist52wPct": dist_52w_pct,
+        "relVol": rel_vol,
+        "startTime": start_time,
+        "endTime": int(times[-1]),
+    }
+
+
+def evaluate_pro_swing_setup(
+    symbol: str,
+    df: pd.DataFrame,
+    rs_rating: float = 80.0,
+    sector_aligned: bool = True,
+    sector_name: str = "",
+    min_rs: float = 70.0,
+    min_turnover_cr: float = 10.0,
+    max_stop_pct: float = 8.0,
+):
+    """
+    Rebuilt Swing Setup Scanner (Daily Chart):
+    - Trend Template: Close > 20 EMA > 50 EMA, 50 EMA rising, within 20% of 52W high
+    - Setups: A (Trend Pullback to 21/50 EMA) + B (Bull Flag), with D (Inside Bar / NR7 Squeeze)
+    - Stops: ATR(14)-normalized stop + 8% max stop pass/fail check
+    - R:R: Measured to recent swing high (Pullback) or measured flagpole target (Bull Flag)
+    """
+    if df is None or df.empty or len(df) < 55:
+        return None
+    if rs_rating < min_rs:
+        return None
+
+    closes = df["close"].values.astype(float)
+    opens = df["open"].values.astype(float)
+    highs = df["high"].values.astype(float)
+    lows = df["low"].values.astype(float)
+    volumes = df["volume"].values.astype(float)
+    times = df["time"].values
+    n = len(df)
+
+    cmp = float(closes[-1])
+    if cmp < 20.0:
+        return None
+
+    # Liquidity: 20-day average daily turnover in Rs Crores
+    avg_vol = float(np.mean(volumes[-21:-1])) if n > 21 else float(np.mean(volumes))
+    turnover_cr = round((cmp * avg_vol) / 1e7, 1)
+    if min_turnover_cr > 0 and turnover_cr < min_turnover_cr:
+        return None
+
+    rel_vol = round(float(volumes[-1]) / (avg_vol + 1e-9), 2)
+
+    # EMA Trend Template: Close >= 20 EMA (pullback tolerance), 20 EMA > 50 EMA, 50 EMA rising
+    close_s = pd.Series(closes)
+    ema20 = float(close_s.ewm(span=20, adjust=False).mean().iloc[-1])
+    ema21 = float(close_s.ewm(span=21, adjust=False).mean().iloc[-1])
+    ema50_s = close_s.ewm(span=50, adjust=False).mean()
+    ema50 = float(ema50_s.iloc[-1])
+    ema50_prev = float(ema50_s.iloc[-10]) if n >= 60 else ema50
+
+    if ema20 <= ema50 or ema50 < ema50_prev * 0.995:
+        return None
+    if cmp < ema50:
+        return None
+
+    lookback_52w = min(n, 252)
+    high_52w = float(np.max(highs[-lookback_52w:]))
+    if cmp < 0.80 * high_52w:
+        return None  # Must be within 20% of 52W high
+
+    # ATR(14) for volatility-normalized stop
+    prev_closes = np.roll(closes, 1)
+    prev_closes[0] = closes[0]
+    tr = np.maximum(highs - lows, np.maximum(np.abs(highs - prev_closes), np.abs(lows - prev_closes)))
+    atr14 = float(pd.Series(tr).rolling(14).mean().iloc[-1])
+    if np.isnan(atr14) or atr14 <= 0:
+        atr14 = cmp * 0.02
+
+    # Setup D (Optional Tighter Squeeze Trigger): Inside Bar or NR7
+    is_inside_bar = bool((highs[-1] <= highs[-2]) and (lows[-1] >= lows[-2]))
+    ranges_7 = highs[-7:] - lows[-7:]
+    is_nr7 = bool(len(ranges_7) == 7 and ranges_7[-1] <= np.min(ranges_7) + 1e-9)
+    squeeze_label = "Inside bar" if is_inside_bar else ("NR7" if is_nr7 else "—")
+    has_squeeze = bool(squeeze_label != "—")
+
+    found_setups = []
+
+    # --- Setup A: Trend Pullback (Main Setup — 21 EMA or 50 EMA pullback) ---
+    recent_3_low = float(np.min(lows[-3:]))
+    dist_21 = ((recent_3_low - ema21) / (ema21 + 1e-9)) * 100.0
+    dist_50 = ((recent_3_low - ema50) / (ema50 + 1e-9)) * 100.0
+    dip_vol_ratio = float(np.mean(volumes[-4:-1])) / (avg_vol + 1e-9)
+
+    pullback_anchor = None
+    if -2.5 <= dist_21 <= 2.2 and cmp >= ema21 * 0.985:
+        pullback_anchor = "21 EMA"
+    elif -2.2 <= dist_50 <= 2.2 and cmp >= ema50 * 0.985:
+        pullback_anchor = "50 EMA"
+
+    if pullback_anchor and dip_vol_ratio <= 0.95:
+        is_hammer = (cmp > opens[-1]) and ((min(cmp, opens[-1]) - lows[-1]) > (highs[-1] - lows[-1]) * 0.45)
+        is_trig = (cmp > highs[-2]) and (cmp > opens[-1]) and (rel_vol >= 1.0)
+        status = "TRIGGERED" if is_trig else "ARMED"
+        trig = round(cmp if is_trig else highs[-1] * 1.001, 2)
+        atr_stop = trig - 1.50 * atr14
+        stop = round(max(recent_3_low * 0.992, atr_stop), 2)
+        if stop >= trig * 0.988:
+            stop = round(trig - 1.25 * atr14, 2)
+        recent_swing_high = float(np.max(highs[max(0, n - 35):-1]))
+        target = round(max(recent_swing_high, trig * 1.03), 2)
+
+        notes = [f"Pullback to {pullback_anchor}", f"RS {int(round(rs_rating))}", f"Volume dried up ({round(dip_vol_ratio, 2)}x)"]
+        if is_hammer:
+            notes.append("Hammer")
+        if has_squeeze:
+            notes.append(squeeze_label)
+
+        found_setups.append({
+            "setup": "A - Pullback",
+            "status": status,
+            "trigger": trig,
+            "stop": stop,
+            "target": target,
+            "driver": " · ".join(notes),
+        })
+
+    # --- Setup B: Bull Flag (Second Setup) ---
+    if n >= 25 and cmp >= ema20 * 0.975:
+        thrust_low = float(np.min(lows[-22:-8]))
+        thrust_high = float(np.max(highs[-15:-4]))
+        thrust_pct = ((thrust_high - thrust_low) / (thrust_low + 1e-9)) * 100.0
+        flag_low = float(np.min(lows[-8:]))
+        flag_high = float(np.max(highs[-8:-1]))
+        retrace_pct = ((thrust_high - flag_low) / (thrust_high - thrust_low + 1e-9)) * 100.0 if thrust_high > thrust_low else 100.0
+
+        if thrust_pct >= 12.0 and 5.0 <= retrace_pct <= 45.0:
+            is_trig = (cmp > flag_high) and (rel_vol >= 1.20)
+            status = "TRIGGERED" if is_trig else "ARMED"
+            trig = round(cmp if is_trig else flag_high * 1.001, 2)
+            atr_stop = trig - 1.75 * atr14
+            stop = round(max(flag_low * 0.995, atr_stop), 2)
+            if stop >= trig * 0.988:
+                stop = round(trig - 1.25 * atr14, 2)
+            # Measured move target to recent high / flagpole extension
+            recent_high = float(np.max(highs[max(0, n - 45):-1]))
+            measured = trig + (thrust_high - thrust_low) * 0.85
+            target = round(max(recent_high, measured), 2)
+
+            notes = [f"Bull flag (7 bars)", f"RS {int(round(rs_rating))}", f"Thrust +{round(thrust_pct)}%, retrace {round(retrace_pct)}%"]
+            if has_squeeze:
+                notes.append(squeeze_label)
+
+            found_setups.append({
+                "setup": "B - Bull Flag",
+                "status": status,
+                "trigger": trig,
+                "stop": stop,
+                "target": target,
+                "driver": " · ".join(notes),
+            })
+
+    if not found_setups:
+        return None
+
+    records = []
+    for s in found_setups:
+        trig = s["trigger"]
+        stop = s["stop"]
+        target = s["target"]
+        if stop <= 0 or stop >= trig or target <= trig:
+            continue
+
+        stop_pct = round(float(((trig - stop) / trig) * 100.0), 2)
+        stop_pass = bool(stop_pct <= float(max_stop_pct))
+        risk = float(trig - stop)
+        rr_val = round(float((target - trig) / max(0.01, risk)), 2)
+        t1 = round(float(trig + 1.5 * risk), 2)
+
+        # Conviction Score (0-99)
+        conv = int(round(
+            min(99, max(50,
+                rs_rating * 0.70
+                + (10 if sector_aligned else 0)
+                + (7 if has_squeeze else 0)
+                + (5 if stop_pass and stop_pct <= 5.5 else 0)
+                + (5 if s["status"] == "TRIGGERED" else 0)
+                + (4 if rr_val >= 2.5 else 0)
+            ))
+        ))
+        conv_tier = "VERY HIGH" if conv >= 82 else ("HIGH" if conv >= 70 else "MODERATE")
+
+        records.append({
+            "symbol": symbol,
+            "setup": s["setup"],
+            "status": s["status"],
+            "conviction": conv,
+            "convictionTier": conv_tier,
+            "rs": int(round(rs_rating)),
+            "sectorAligned": bool(sector_aligned),
+            "sectorName": str(sector_name or ""),
+            "cmp": round(float(cmp), 2),
+            "trigger": round(float(trig), 2),
+            "stop": round(float(stop), 2),
+            "stopPct": float(stop_pct),
+            "stopPass": bool(stop_pass),
+            "rr": float(rr_val),
+            "target1": float(t1),
+            "target": round(float(target), 2),
+            "squeeze": str(squeeze_label),
+            "hasSqueeze": bool(has_squeeze),
+            "relVol": float(rel_vol),
+            "turnoverCr": float(turnover_cr),
+            "ema20": round(ema20, 2),
+            "ema21": round(ema21, 2),
+            "ema50": round(ema50, 2),
+            "tsl21Ema": round(ema21 * 0.995, 2),
+            "tsl50Ema": round(ema50 * 0.995, 2),
+            "atr14": round(atr14, 2),
+            "drivers": s["driver"],
+            "startTime": int(times[max(0, n - 25)]),
+            "endTime": int(times[-1]),
+        })
+
+    if not records:
+        return None
+
+    # Return only the single best setup per symbol (prioritize TRIGGERED, healthy R:R >= 1.5, higher R:R, higher conviction)
+    best = max(records, key=lambda r: (r["status"] == "TRIGGERED", r["rr"] >= 1.5, r["rr"], r["conviction"]))
+    return [best]

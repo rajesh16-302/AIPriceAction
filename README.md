@@ -2,7 +2,7 @@
 
 A self-hosted, professional-grade, TradingView-style interactive charting and batch market screening terminal built with **Python Flask**, **TradingView Lightweight Charts (v5.1.0)**, and **Yahoo Finance (`yfinance`)**.
 
-The terminal features automated detection of **14 classical & modern chart patterns**, **Smart Money Concepts (SMC)** market structure (`HH`, `HL`, `LH`, `LL`, `BOS`, `CHoCH`), **dynamic viewport Support & Resistance**, **multi-touch trendlines**, **algorithmic trade planning levels**, and **high-speed batch market screeners** across the entire National Stock Exchange (NSE) of India universe (2,200+ equities & official index baskets)—**100% free, requiring zero broker API keys or paid data subscriptions**.
+The terminal features automated detection of **14 classical & modern chart patterns**, **Smart Money Concepts (SMC)** market structure (`HH`, `HL`, `LH`, `LL`, `BOS`, `CHoCH`), **dynamic viewport Support & Resistance**, **multi-touch trendlines**, **live Sector & Theme Rotation Studio (RRG)**, **algorithmic trade planning levels**, and **high-speed batch market screeners** across the entire National Stock Exchange (NSE) of India universe (2,200+ equities & official index baskets)—**100% free, requiring zero broker API keys or paid data subscriptions**.
 
 > For the comprehensive documentation, technical architecture, and user guide, see [Readme Version 1.1.md](file:///d:/Personal/PriceAction/Readme%20Version%201.1.md).
 
@@ -37,6 +37,9 @@ python app.py
 * **Web UI (Recommended):** Click **🧪 Backtest** in the top bar to configure strategies, index baskets, capital, and risk management directly in your browser with real-time KPI metrics, click-to-chart trade inspection, and Excel export.
 * **CLI Engine (Optional):**
   ```bash
+  # Backtest 4-6W Swing Leader (1:3 RR) across Nifty 500 over 3 years
+  python backtester.py --strategy swing_leader_3r --basket nifty500 --period 3y
+
   # Backtest Cup & Handle breakouts across Nifty 50 over 3 years
   python backtester.py --strategy cup_handle --basket nifty50 --period 3y
   ```
@@ -55,10 +58,12 @@ python app.py
    - Right Pattern Navigator
    - Interactive Legend & Trade Plan Overlay
    - Keyboard Shortcuts & Navigation
-6. Built-In Market Scanners
+6. Built-In Market Scanners & Sector Rotation
    - Multi-Scale Cup & Handle Screener (60% Low Cheat, 80% Mid Cheat, 100% Breakout)
    - Multi-Year Breakout (MYB) Scanner (2Y, 3Y, 5Y, ATH)
    - Weekly HL / LL & Reversal Forecast Scanner
+   - 4–6W Swing Leader (1:3 RR) Scanner (Stage 2 + Leading Sector RS + C&H / Bull Flag)
+   - Live Sector & Theme Rotation Studio (4-Quadrant RRG, Strongest Cards, Money Movement, Performance Lines)
    - Dockable Scanner Panel & Excel Export
 7. Supported Chart Patterns (14 Formations)
 8. Historical Backtesting Engine (`backtester.py`)

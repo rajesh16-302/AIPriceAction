@@ -27,6 +27,8 @@ from pattern_detector import (
     analyze_dataframe,
     evaluate_weekly_hl_ll,
     evaluate_multiyear_breakout,
+    evaluate_swing_leader_3r,
+    evaluate_pro_swing_setup,
 )
 
 # Import market data utilities and index baskets from app
@@ -223,9 +225,12 @@ class BacktestEngine:
         highs = df["high"].values
         lows = df["low"].values
         closes = df["close"].values
+        ema21_arr = df["close"].ewm(span=21, adjust=False).mean().values
+        ema50_arr = df["close"].ewm(span=50, adjust=False).mean().values
 
         # Minimum warm-up period for indicators & pivot detection
         warmup = 35 if timeframe == "1d" else 52
+        pending_order = None  # Trigger-entry stop-buy order (expires after 3 bars)
 
         for i in range(warmup, n - 1):
             curr_time = times[i]
@@ -236,6 +241,48 @@ class BacktestEngine:
             next_close = closes[i + 1]
             next_time = times[i + 1]
             next_date = self._format_date(next_time)
+
+            # 0. Check Pending Trigger-Entry (STOP_BUY) Order on bar i+1
+            if pending_order is not None and not any(t.symbol == symbol for t in self.open_trades) and len(self.open_trades) < self.max_open_trades:
+                if next_low <= pending_order["stop_loss"] and next_open < pending_order["trigger_price"]:
+                    pending_order = None  # Invalidated before triggering
+                elif next_high >= pending_order["trigger_price"]:
+                    fill_price = max(next_open, pending_order["trigger_price"])
+                    stop_loss = pending_order["stop_loss"]
+                    if fill_price >= 5.0 and stop_loss > 0 and fill_price > stop_loss:
+                        min_sl_dist = fill_price * 0.015
+                        max_sl_dist = fill_price * 0.08
+                        actual_risk = max(min_sl_dist, min(max_sl_dist, fill_price - stop_loss))
+                        stop_loss = round(fill_price - actual_risk, 2)
+                        capital_risk = self.initial_capital * self.risk_pct
+                        shares = max(1, int(capital_risk / max(0.25, actual_risk)))
+                        max_shares = max(1, int((self.initial_capital * 0.15) / fill_price))
+                        shares = max(1, min(shares, max_shares))
+                        self.trade_counter += 1
+                        new_trade = Trade(
+                            trade_id=self.trade_counter,
+                            symbol=symbol,
+                            strategy=pending_order["strategy"],
+                            pattern_name=pending_order["pattern_name"],
+                            direction="long",
+                            entry_idx=i + 1,
+                            entry_time=next_time,
+                            entry_date=next_date,
+                            entry_price=fill_price * (1.0 + self.friction_pct),
+                            stop_loss=stop_loss,
+                            target_1=pending_order["target_1"],
+                            target_2=pending_order["target_2"],
+                            target_3=pending_order["target_2"] * 1.15,
+                            shares=shares,
+                            capital_allocated=shares * fill_price,
+                            risk_amount=min(capital_risk, shares * actual_risk),
+                        )
+                        self.open_trades.append(new_trade)
+                    pending_order = None
+                else:
+                    pending_order["ttl"] -= 1
+                    if pending_order["ttl"] <= 0:
+                        pending_order = None
 
             # 1. Manage Active Open Trades for this symbol
             active_for_symbol = [t for t in self.open_trades if t.symbol == symbol]
@@ -279,21 +326,56 @@ class BacktestEngine:
                     self.trades.append(trade)
                     continue
 
-                # Dynamic Trailing SL: trail below 5-bar low if profitable
-                if trade.t1_hit and i >= 5:
-                    recent_swing = np.min(lows[i - 4:i + 1])
-                    if recent_swing > trade.entry_price:
-                        trade.update_sl(recent_swing * 0.995)
+                # Dynamic Trailing SL: closing-basis 21/50 EMA for pro_swing, else intraday TSL
+                if self.strategy == "pro_swing":
+                    if trade.t1_hit and next_close < float(ema21_arr[i + 1]):
+                        trade.close(i + 1, next_time, next_date, next_close, "EMA21_CLOSE_TSL", self.friction_pct)
+                        self.current_capital += trade.pnl
+                        self.open_trades.remove(trade)
+                        self.trades.append(trade)
+                        continue
+                    if not trade.t1_hit and i > trade.entry_idx and next_close < float(ema50_arr[i + 1]):
+                        trade.close(i + 1, next_time, next_date, next_close, "EMA50_CLOSE_TSL", self.friction_pct)
+                        self.current_capital += trade.pnl
+                        self.open_trades.remove(trade)
+                        self.trades.append(trade)
+                        continue
+                else:
+                    ema50_tsl = float(ema50_arr[i]) * 0.995
+                    if ema50_tsl > trade.current_sl and next_close > float(ema50_arr[i]):
+                        trade.update_sl(ema50_tsl)
+                    if trade.t1_hit:
+                        ema21_tsl = float(ema21_arr[i]) * 0.995
+                        if ema21_tsl > trade.entry_price and next_close > float(ema21_arr[i]):
+                            trade.update_sl(ema21_tsl)
+                        if i >= 5:
+                            recent_swing = np.min(lows[i - 4:i + 1])
+                            if recent_swing > trade.entry_price and recent_swing * 0.995 < ema21_tsl:
+                                trade.update_sl(recent_swing * 0.995)
 
             # 2. Check Signal Generation at bar i (strictly historical slice up to i)
             if len(self.open_trades) >= self.max_open_trades:
                 continue
             if any(t.symbol == symbol for t in self.open_trades):
                 continue  # Avoid duplicate entries in same symbol
+            if pending_order is not None:
+                continue
 
             slice_df = df.iloc[:i + 1].reset_index(drop=True)
             signal = self._detect_signal(symbol, slice_df, timeframe)
             if not signal:
+                continue
+
+            if signal.get("entry_type") == "STOP_BUY":
+                pending_order = {
+                    "strategy": signal["strategy"],
+                    "pattern_name": signal["pattern_name"],
+                    "trigger_price": signal["trigger_price"],
+                    "stop_loss": signal["stop_loss"],
+                    "target_1": signal["target_1"],
+                    "target_2": signal["target_2"],
+                    "ttl": 3,
+                }
                 continue
 
             # 3. Position Sizing & Order Placement for next bar (i + 1)
@@ -379,16 +461,23 @@ class BacktestEngine:
         if len(all_times) < 40:
             return
 
-        # Precompute lookup: sym -> dict of time -> row index
+        # Precompute lookup: sym -> dict of time -> row index, plus 21/50 EMA arrays for TSL
         sym_lookup = {}
+        sym_emas = {}
         for sym, df in valid_map.items():
             sym_lookup[sym] = {
                 t: idx for idx, t in enumerate(df["time"].values)
             }
+            sym_emas[sym] = (
+                df["close"].ewm(span=21, adjust=False).mean().values,
+                df["close"].ewm(span=50, adjust=False).mean().values,
+            )
 
         warmup = 35 if timeframe == "1d" else 52
         if len(all_times) <= warmup + 2:
             warmup = len(all_times) // 2
+
+        pending_orders = {}  # sym -> trigger-entry STOP_BUY order (expires after 3 bars)
 
         # Step through unified calendar day-by-day
         for t_idx in range(warmup, len(all_times) - 1):
@@ -396,6 +485,68 @@ class BacktestEngine:
             next_time = all_times[t_idx + 1]
             curr_date = self._format_date(curr_time)
             next_date = self._format_date(next_time)
+
+            # 0. Check Pending Trigger-Entry (STOP_BUY) Orders on bar t+1
+            for sym in list(pending_orders.keys()):
+                if len(self.open_trades) >= self.max_open_trades or any(t.symbol == sym for t in self.open_trades):
+                    pending_orders.pop(sym, None)
+                    continue
+                order = pending_orders[sym]
+                df = valid_map.get(sym)
+                lookup = sym_lookup.get(sym, {})
+                if df is None or next_time not in lookup:
+                    continue
+                bar_idx = lookup[next_time]
+                next_open = float(df["open"].iloc[bar_idx])
+                next_high = float(df["high"].iloc[bar_idx])
+                next_low = float(df["low"].iloc[bar_idx])
+
+                if next_low <= order["stop_loss"] and next_open < order["trigger_price"]:
+                    pending_orders.pop(sym, None)
+                    continue
+                if next_high >= order["trigger_price"]:
+                    fill_price = max(next_open, order["trigger_price"])
+                    stop_loss = order["stop_loss"]
+                    if fill_price >= 5.0 and stop_loss > 0 and fill_price > stop_loss and self.current_capital > (self.initial_capital * 0.08):
+                        min_sl_dist = fill_price * 0.015
+                        max_sl_dist = fill_price * 0.08
+                        actual_risk = max(min_sl_dist, min(max_sl_dist, fill_price - stop_loss))
+                        stop_loss = round(fill_price - actual_risk, 2)
+                        per_slot_capital = min(self.current_capital, (self.initial_capital * (1.0 / max(1, self.max_open_trades))))
+                        capital_risk = min(self.initial_capital * self.risk_pct, per_slot_capital * 0.05)
+                        shares = max(1, int(capital_risk / max(0.25, actual_risk)))
+                        total_allocated = shares * fill_price
+                        if total_allocated > self.current_capital:
+                            shares = int(self.current_capital / fill_price)
+                            total_allocated = shares * fill_price
+                        if shares > 0:
+                            self.current_capital -= total_allocated
+                            self.trade_counter += 1
+                            new_trade = Trade(
+                                trade_id=self.trade_counter,
+                                symbol=sym,
+                                strategy=order["strategy"],
+                                pattern_name=order["pattern_name"],
+                                direction="long",
+                                entry_idx=bar_idx,
+                                entry_time=next_time,
+                                entry_date=next_date,
+                                entry_price=fill_price * (1.0 + self.friction_pct),
+                                stop_loss=stop_loss,
+                                target_1=order["target_1"],
+                                target_2=order["target_2"],
+                                target_3=order["target_2"] * 1.15,
+                                shares=shares,
+                                capital_allocated=total_allocated,
+                                risk_amount=min(capital_risk, shares * actual_risk),
+                            )
+                            new_trade.holding_bars = 0
+                            self.open_trades.append(new_trade)
+                    pending_orders.pop(sym, None)
+                else:
+                    order["ttl"] -= 1
+                    if order["ttl"] <= 0:
+                        pending_orders.pop(sym, None)
 
             # 1. Manage Active Open Trades across entire portfolio
             for trade in list(self.open_trades):
@@ -448,18 +599,40 @@ class BacktestEngine:
                     self.trades.append(trade)
                     continue
 
-                # Trailing SL: trail below 5-bar low if profitable
-                if trade.t1_hit and bar_idx >= 5:
-                    recent_lows = df["low"].iloc[bar_idx - 4:bar_idx + 1].values
-                    recent_swing = float(np.min(recent_lows))
-                    if recent_swing > trade.entry_price:
-                        trade.update_sl(recent_swing * 0.995)
+                # Dynamic Trailing SL: closing-basis 21/50 EMA for pro_swing, else intraday TSL
+                ema21_arr, ema50_arr = sym_emas[sym]
+                if self.strategy == "pro_swing":
+                    if trade.t1_hit and next_close < float(ema21_arr[bar_idx]):
+                        trade.close(bar_idx, next_time, next_date, next_close, "EMA21_CLOSE_TSL", self.friction_pct)
+                        self.current_capital += (trade.capital_allocated + trade.pnl)
+                        self.open_trades.remove(trade)
+                        self.trades.append(trade)
+                        continue
+                    if not trade.t1_hit and bars_held > 1 and next_close < float(ema50_arr[bar_idx]):
+                        trade.close(bar_idx, next_time, next_date, next_close, "EMA50_CLOSE_TSL", self.friction_pct)
+                        self.current_capital += (trade.capital_allocated + trade.pnl)
+                        self.open_trades.remove(trade)
+                        self.trades.append(trade)
+                        continue
+                else:
+                    ema50_tsl = float(ema50_arr[bar_idx]) * 0.995
+                    if ema50_tsl > trade.current_sl and next_close > float(ema50_arr[bar_idx]):
+                        trade.update_sl(ema50_tsl)
+                    if trade.t1_hit:
+                        ema21_tsl = float(ema21_arr[bar_idx]) * 0.995
+                        if ema21_tsl > trade.entry_price and next_close > float(ema21_arr[bar_idx]):
+                            trade.update_sl(ema21_tsl)
+                        if bar_idx >= 5:
+                            recent_lows = df["low"].iloc[bar_idx - 4:bar_idx + 1].values
+                            recent_swing = float(np.min(recent_lows))
+                            if recent_swing > trade.entry_price and recent_swing * 0.995 < ema21_tsl:
+                                trade.update_sl(recent_swing * 0.995)
 
             # 2. Check Signals if portfolio has open slots
             available_slots = self.max_open_trades - len(self.open_trades)
             if available_slots > 0 and self.current_capital > (self.initial_capital * 0.08):
                 candidates = []
-                held_symbols = {t.symbol for t in self.open_trades}
+                held_symbols = {t.symbol for t in self.open_trades} | set(pending_orders.keys())
 
                 for sym, df in valid_map.items():
                     if sym in held_symbols:
@@ -483,6 +656,17 @@ class BacktestEngine:
                 candidates.sort(key=lambda c: -c[1].get("relVol", 1.0) if "relVol" in c[1] else -c[1].get("trigger_price", 0))
 
                 for sym, sig, df, next_bar_idx in candidates[:available_slots]:
+                    if sig.get("entry_type") == "STOP_BUY":
+                        pending_orders[sym] = {
+                            "strategy": sig["strategy"],
+                            "pattern_name": sig["pattern_name"],
+                            "trigger_price": sig["trigger_price"],
+                            "stop_loss": sig["stop_loss"],
+                            "target_1": sig["target_1"],
+                            "target_2": sig["target_2"],
+                            "ttl": 3,
+                        }
+                        continue
                     next_open = float(df["open"].iloc[next_bar_idx])
                     entry_price = next_open if sig["entry_type"] == "MARKET" else sig["trigger_price"]
                     stop_loss = sig["stop_loss"]
@@ -657,6 +841,42 @@ class BacktestEngine:
                     "stop_loss": round(sl, 2),
                     "target_1": round(last_close + 1.5 * risk, 2),
                     "target_2": round(last_close + 2.5 * risk, 2),
+                }
+
+        # --- E. 4-6W Swing Leader (1:3 RR • C&H Cheat / Bull Flag + Stage 2) ---
+        if self.strategy in ("swing_leader_3r", "all"):
+            sl_hit = evaluate_swing_leader_3r(symbol, slice_df)
+            if sl_hit:
+                return {
+                    "strategy": "4-6W Swing Leader (1:3 RR)",
+                    "pattern_name": sl_hit["setupType"],
+                    "direction": "long",
+                    "entry_type": "MARKET",
+                    "trigger_price": last_close,
+                    "stop_loss": sl_hit["stopLoss"],
+                    "target_1": sl_hit["target1"],
+                    "target_2": sl_hit["target2"],
+                    "relVol": sl_hit["relVol"],
+                }
+
+        # --- F. Pro Swing Setup (A: Trend Pullback + B: Bull Flag + D: Squeeze, Trigger Entry) ---
+        if self.strategy in ("pro_swing",):
+            recs = evaluate_pro_swing_setup(symbol, slice_df, rs_rating=80.0, sector_aligned=True, min_rs=70.0, min_turnover_cr=0.0)
+            if recs:
+                best = max(recs, key=lambda r: (r["status"] == "TRIGGERED", r["conviction"]))
+                trig = float(best["trigger"])
+                stop = float(best["stop"])
+                risk = max(trig * 0.015, trig - stop)
+                return {
+                    "strategy": "Pro Swing (Pullback / Bull Flag)",
+                    "pattern_name": best["setup"],
+                    "direction": "long",
+                    "entry_type": "STOP_BUY",
+                    "trigger_price": trig,
+                    "stop_loss": stop,
+                    "target_1": round(trig + 1.5 * risk, 2),
+                    "target_2": round(trig + 3.0 * risk, 2),
+                    "relVol": best["relVol"],
                 }
 
         return None
@@ -887,7 +1107,7 @@ def main():
         "--strategy",
         type=str,
         default="cup_handle",
-        choices=["cup_handle", "myb", "weekly_reversal", "patterns", "all"],
+        choices=["cup_handle", "myb", "weekly_reversal", "patterns", "swing_leader_3r", "pro_swing", "all"],
         help="Strategy module to backtest.",
     )
     parser.add_argument(

@@ -19,10 +19,12 @@ The terminal features automated detection of **14 classical & modern chart patte
    - [Right Pattern Navigator](#right-pattern-navigator)
    - [Interactive Legend & Trade Plan Overlay](#interactive-legend--trade-plan-overlay)
    - [Keyboard Shortcuts & Navigation](#keyboard-shortcuts--navigation)
-6. [Built-In Market Scanners](#built-in-market-scanners)
+6. [Built-In Market Scanners & Sector Rotation](#built-in-market-scanners)
    - [1. Multi-Scale Cup & Handle Screener](#1-multi-scale-cup--handle-screener)
    - [2. Multi-Year Breakout (MYB) Scanner](#2-multi-year-breakout-myb-scanner)
    - [3. Weekly HL / LL & Reversal Forecast Scanner](#3-weekly-hl--ll--reversal-forecast-scanner)
+   - [4. 4–6W Swing Leader (1:3 RR) Scanner](#4-46w-swing-leader-13-rr-scanner)
+   - [5. Live Sector & Theme Rotation Studio (RRG)](#5-live-sector--theme-rotation-studio-rrg)
    - [Dockable Scanner Panel & Excel Export](#dockable-scanner-panel--excel-export)
 7. [Supported Chart Patterns (14 Formations)](#supported-chart-patterns-14-formations)
 8. [Historical Backtesting Engine (`backtester.py`)](#historical-backtesting-engine-backtesterpy)
@@ -49,8 +51,12 @@ The terminal features automated detection of **14 classical & modern chart patte
   Includes Ascending/Descending/Symmetrical Triangles, Head & Shoulders, Inverse Head & Shoulders, Bull & Bear Flags, Double Tops & Bottoms, Rounding Tops & Bottoms, Rising & Falling Wedges, and Multi-Scale Cup & Handle with cheat entries.
 * **Trade Plan Engine:**
   Plots Entry, Stop Loss (SL), Trailing Stop Loss (TSL), and 3 Target price levels (`T1`, `T2`, `T3`) directly onto the chart and top legend.
-* **3 Institutional Batch Market Scanners:**
-  Batch screen entire index baskets for Cup & Handle cheat stages, Multi-Year Breakouts (2Y, 3Y, 5Y, ATH), and Weekly Higher/Lower Low reversal setups.
+* **4 Institutional Batch Market Scanners:**
+  Batch screen entire index baskets for Cup & Handle cheat stages, Multi-Year Breakouts (2Y, 3Y, 5Y, ATH), Weekly Higher/Lower Low reversals, and **4–6W Swing Leader (1:3 RR)** Stage 2 setups.
+* **Live Sector & Theme Rotation Studio (RRG):**
+  Computes real-time Relative Strength (1–99), 4-Quadrant RRG coordinates & historical trails, breadth (`Adv/Dec`, `>50 DMA`, `>200 DMA`), rank shifts (`1D/1W/3W/6W`), and comparative performance curves across **20 Sectors & 21 Themes** from live NSE prices.
+* **IST (UTC+5:30) Timezone Localization:**
+  Chart axis tick marks, crosshair tooltips, hover legends, and pattern date labels are calibrated to **Indian Standard Time (IST)**.
 * **Dockable Side-by-Side Screening:**
   Dock scanner results to the right side of the screen with a resizable drag handle to inspect charts and scanner hits simultaneously.
 * **Comprehensive Drawing Rail:**
@@ -84,12 +90,14 @@ Organize your project directory as follows:
 Price Action/
 ├── app.py                          # Flask application server, caching engine, NSE CSV fetcher & REST APIs
 ├── pattern_detector.py             # Pivot detection, dynamic S&R, SMC structure, 14 chart patterns & scanner algorithms
-├── backtester.py                   # Event-driven historical backtesting engine with risk management & reports
+├── sector_rotation.py              # Live NSE Sector & Theme Rotation engine (41 groups, RRG, RS 1-99, breadth & sparklines)
+├── backtester.py                   # Event-driven historical & multi-asset portfolio backtesting engine
 ├── requirements.txt                # Required Python packages
 ├── README.md                       # Base documentation
 ├── Readme Version 1.1.md           # Detailed user guide and architectural manual (this document)
 ├── nse_stocks_cache.json           # Auto-generated cache of 2,200+ NSE symbols (created on first run)
 ├── nse_baskets_cache.json          # Auto-generated cache of NSE index constituent lists (created on first run)
+├── sector_rotation_cache.json      # Auto-generated 15-min cache of live Sector Rotation studio metrics
 ├── backtest_results/               # Auto-generated directory containing exported trade logs (.csv)
 └── templates/
     └── index.html                  # Single-page frontend (TradingView Lightweight Charts v5.1.0 + scanner modals)
@@ -413,6 +421,30 @@ The scanner computes a composite score (ranging from $-65$ to $+145$) based on c
 
 ---
 
+### 4. 4–6W Swing Leader (1:3 RR) Scanner
+
+Screens Daily (`1d`) charts for intermediate 4–6 week swing trades targeting a **1:3 Risk-to-Reward** profile with controlled drawdown (`evaluate_swing_leader_3r` in `pattern_detector.py`, served at `/api/scan-swing-leader`):
+
+* **20 & 50 EMA Trend Alignment:** Price $\ge$ rising **20 EMA** and **20 EMA $\ge$ rising 50 EMA**, trading within **20% of its 52-week high**.
+* **Sector RS Alignment:** Cross-references live **Leading** and **Improving** sectors/themes from `sector_rotation.py` and provides a **Leading / Improving Sectors Only** filter.
+* **High-Asymmetry Triggers:** Detects **Cup & Handle (`80% Mid Cheat` / `100% Rim Breakout`)** or **Bull Flag Breakouts** with **Rel Vol $\ge$ 1.20×** volume confirmation.
+* **Hybrid 1:3 RR & 21/50 EMA Trailing Stop Loss:** Stop Loss capped at **$\le$ 6.5%**, **Target 1 at 1.5R** (scale 50% & move SL to breakeven), **Target 2 at 3.0R**, with dynamic **21 EMA** pullback trailing stop + **50 EMA** structural trailing floor (`backtester.py`).
+* **Market Regime Gate:** Displays live Nifty 50 (`^NSEI`) status vs. its **20 & 50 EMA** (`BULLISH` vs. `CAUTION`).
+
+---
+
+### 5. Live Sector & Theme Rotation Studio (RRG)
+
+Computes live institutional Relative Strength and sector rotation across **41 groups (20 NSE Sectors + 21 Curated Themes)** using 1 year of daily OHLCV prices (`sector_rotation.py`, `/api/sector-rotation`):
+
+* **Rotation Graph (RRG):** Plots **Strength** (3M median excess return vs. benchmark) on X vs. **Momentum** (1M $\Delta$ RS rating) on Y with real historical trails across **Leading**, **Improving**, **Weakening**, and **Lagging** quadrants.
+* **Strongest Groups (Cards):** Ranks groups via $\text{Score} = 60\% \text{ Median RS} + 20\% (>50\text{ DMA}) + 20\% (>200\text{ DMA})$ with advancing/declining counts and clickable top-RS stock pills.
+* **Where Money Is Moving:** Tracks live rank climbers and fallers across **`1D`**, **`1W`**, **`3W`**, and **`6W`** horizons.
+* **Group Performance (Lines):** Comparative **`1W`**, **`1M`**, and **`3M`** cumulative median return curves for top 3 gainers and bottom 3 laggards.
+* **15-Minute Cache & Force Refresh:** Caches live results in memory and `sector_rotation_cache.json` for fast loads; clicking **▶ Refresh** triggers `force=1` for fresh Yahoo Finance prices.
+
+---
+
 ### Dockable Scanner Panel & Excel Export
 
 * **⇥ Dock Mode:**
@@ -459,7 +491,7 @@ You can run, visualize, and analyze backtests directly inside your browser witho
 
 1. Click **🧪 Backtest** in the top bar (or select **Scanners ▾ → 🧪 Strategy Backtester**).
 2. Configure your parameters:
-   * **Strategy:** Choose *Cup & Handle*, *Multi-Year Breakout*, *Weekly Reversal*, *14 Classical Patterns*, or *All Combined*.
+   * **Strategy:** Choose *4-6W Swing Leader (1:3 RR)*, *Cup & Handle*, *Multi-Year Breakout*, *Weekly Reversal*, *14 Classical Patterns*, or *All Combined*.
    * **Index Basket:** Choose *Nifty 50*, *Nifty 100*, *Nifty Midcap*, *Nifty 500*, *Pharma & Watchlist*, or *Current Chart Symbol*.
    * **Timeframe & Period:** Select Daily (`1D`) or Weekly (`1W`) over 1, 2, 3, or 5 years.
    * **Capital & Risk:** Customize starting capital (₹), risk per trade (%), max simultaneous positions, and friction (%).
@@ -476,6 +508,7 @@ You can run, visualize, and analyze backtests directly inside your browser witho
 ### 2. Standalone CLI Backtesting Engine (`backtester.py`)
 
 ### Key Backtester Capabilities:
+* **Unified Multi-Asset Portfolio Simulation (`run_portfolio`):** When backtesting an index basket, simulates a single unified chronological timeline across all symbols—strictly enforcing `max_open_trades` globally, tracking real holding bars, and managing portfolio cash & drawdown accurately.
 * **Forward Rolling Window Simulation:** Indicators and patterns are evaluated strictly on historical bars up to bar $t$, entering orders on bar $t+1$ at Open or trigger price.
 * **Risk & Position Sizing:** Calculates exact share quantities based on portfolio equity risk (e.g. 1.0% risk per trade) and maximum portfolio allocation.
 * **Dynamic Trade Management:**
@@ -489,7 +522,10 @@ You can run, visualize, and analyze backtests directly inside your browser witho
 ### Quick Backtesting Commands:
 
 ```bash
-# 1. Backtest Cup & Handle breakouts on Nifty 50 over 3 years
+# 1. Backtest 4-6W Swing Leader (1:3 RR) on Nifty 500 over 3 years
+python backtester.py --strategy swing_leader_3r --basket nifty500 --period 3y --timeframe 1d
+
+# 2. Backtest Cup & Handle breakouts on Nifty 50 over 3 years
 python backtester.py --strategy cup_handle --basket nifty50 --period 3y --timeframe 1d
 
 # 2. Backtest Multi-Year Breakouts on Weekly charts

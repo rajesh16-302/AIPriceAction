@@ -11,12 +11,16 @@ Includes:
 5. Group Performance Multi-Line Comparative Sparklines (1W, 1M, 3M)
 """
 
+import os
+import json
 import time
 import threading
 from datetime import datetime, timezone, timedelta
 IST = timezone(timedelta(hours=5, minutes=30))
 import numpy as np
 import pandas as pd
+
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_rotation_cache.json")
 
 # =============================================================================
 # 1. DEFINITION OF 20 SECTORS AND 21 THEMES (41 GROUPS TOTAL)
@@ -57,7 +61,7 @@ SECTORS_DATA = [
         "x": 4.5, "y": 1.8, "quadrant": "LEADING", "rs_rating": 90, "delta_rs": 3, "score": 66, "median_rs": 89.5, "adv_count": 2, "dec_count": 6, "total_count": 8,
         "rank": 3, "prev_rank": 1, "ret_1d": -0.2, "ret_1w": 0.5, "ret_1m": -0.9, "ret_3m": 18.2, "ret_6m": 21.5, "ret_1y": 18.0,
         "top_stocks": [{"name": "PVRINOX", "symbol": "PVRINOX.NS", "rs": 95}, {"name": "SAREGAMA", "symbol": "SAREGAMA.NS", "rs": 95}, {"name": "NAZARA", "symbol": "NAZARA.NS", "rs": 91}, {"name": "SUNTV", "symbol": "SUNTV.NS", "rs": 88}],
-        "constituents": ["PVRINOX.NS", "SAREGAMA.NS", "NAZARA.NS", "SUNTV.NS", "ZEEL.NS", "TIPSINDLTD.NS", "NETWORK18.NS", "TV18BRDCST.NS"]
+        "constituents": ["PVRINOX.NS", "SAREGAMA.NS", "NAZARA.NS", "SUNTV.NS", "ZEEL.NS", "TIPSMUSIC.NS", "NETWORK18.NS", "DBCORP.NS"]
     },
     {
         "id": "sec_realty",
@@ -117,7 +121,7 @@ SECTORS_DATA = [
         "x": 0.4, "y": -0.9, "quadrant": "WEAKENING", "rs_rating": 55, "delta_rs": -2, "score": 55, "median_rs": 56.0, "adv_count": 3, "dec_count": 20, "total_count": 23,
         "rank": 8, "prev_rank": 8, "ret_1d": -0.3, "ret_1w": 0.4, "ret_1m": -2.1, "ret_3m": 1.8, "ret_6m": 8.5, "ret_1y": 26.0,
         "top_stocks": [{"name": "RELIANCE", "symbol": "RELIANCE.NS", "rs": 94}, {"name": "ONGC", "symbol": "ONGC.NS", "rs": 92}, {"name": "BPCL", "symbol": "BPCL.NS", "rs": 89}, {"name": "COALINDIA", "symbol": "COALINDIA.NS", "rs": 85}],
-        "constituents": ["RELIANCE.NS", "ONGC.NS", "IOC.NS", "BPCL.NS", "GAIL.NS", "COALINDIA.NS", "PETRONET.NS", "GUJGASLTD.NS", "IGL.NS"]
+        "constituents": ["RELIANCE.NS", "ONGC.NS", "IOC.NS", "BPCL.NS", "GAIL.NS", "COALINDIA.NS", "PETRONET.NS", "IGL.NS", "IGL.NS"]
     },
     {
         "id": "sec_financials",
@@ -152,8 +156,8 @@ SECTORS_DATA = [
         "color": "#db2777",
         "x": -0.5, "y": 0.6, "quadrant": "IMPROVING", "rs_rating": 52, "delta_rs": 3, "score": 52, "median_rs": 53.0, "adv_count": 15, "dec_count": 32, "total_count": 47,
         "rank": 11, "prev_rank": 14, "ret_1d": 0.2, "ret_1w": 1.1, "ret_1m": -2.5, "ret_3m": -1.5, "ret_6m": 5.2, "ret_1y": 18.0,
-        "top_stocks": [{"name": "ZOMATO", "symbol": "ZOMATO.NS", "rs": 95}, {"name": "JUBLFOOD", "symbol": "JUBLFOOD.NS", "rs": 89}, {"name": "DEVYANI", "symbol": "DEVYANI.NS", "rs": 84}, {"name": "NYKAA", "symbol": "NYKAA.NS", "rs": 81}],
-        "constituents": ["ZOMATO.NS", "JUBLFOOD.NS", "DEVYANI.NS", "NYKAA.NS", "DELHIVERY.NS", "SAPPHIRE.NS", "WESTLIFE.NS"]
+        "top_stocks": [{"name": "ZOMATO", "symbol": "ETERNAL.NS", "rs": 95}, {"name": "JUBLFOOD", "symbol": "JUBLFOOD.NS", "rs": 89}, {"name": "DEVYANI", "symbol": "DEVYANI.NS", "rs": 84}, {"name": "NYKAA", "symbol": "NYKAA.NS", "rs": 81}],
+        "constituents": ["ETERNAL.NS", "JUBLFOOD.NS", "DEVYANI.NS", "NYKAA.NS", "DELHIVERY.NS", "SAPPHIRE.NS", "WESTLIFE.NS"]
     },
     {
         "id": "sec_diversified",
@@ -164,8 +168,8 @@ SECTORS_DATA = [
         "color": "#64748b",
         "x": -1.8, "y": -0.5, "quadrant": "LAGGING", "rs_rating": 50, "delta_rs": 1, "score": 50, "median_rs": 43.5, "adv_count": 0, "dec_count": 4, "total_count": 4,
         "rank": 12, "prev_rank": 13, "ret_1d": -0.1, "ret_1w": 0.3, "ret_1m": -1.5, "ret_3m": -4.2, "ret_6m": 2.1, "ret_1y": 15.0,
-        "top_stocks": [{"name": "ADANIENT", "symbol": "ADANIENT.NS", "rs": 90}, {"name": "GODREJIND", "symbol": "GODREJIND.NS", "rs": 85}, {"name": "CENTURYTEX", "symbol": "CENTURYTEX.NS", "rs": 78}],
-        "constituents": ["ADANIENT.NS", "ITC.NS", "GODREJIND.NS", "CENTURYTEX.NS", "DCMSRM.NS"]
+        "top_stocks": [{"name": "ADANIENT", "symbol": "ADANIENT.NS", "rs": 90}, {"name": "GODREJIND", "symbol": "GODREJIND.NS", "rs": 85}, {"name": "CENTURYTEX", "symbol": "ABREL.NS", "rs": 78}],
+        "constituents": ["ADANIENT.NS", "ITC.NS", "GODREJIND.NS", "ABREL.NS", "DCMSRM.NS"]
     },
     {
         "id": "sec_telecom",
@@ -201,7 +205,7 @@ SECTORS_DATA = [
         "x": -0.8, "y": -1.5, "quadrant": "LAGGING", "rs_rating": 45, "delta_rs": -4, "score": 45, "median_rs": 44.0, "adv_count": 23, "dec_count": 26, "total_count": 49,
         "rank": 15, "prev_rank": 11, "ret_1d": -0.3, "ret_1w": -0.8, "ret_1m": 1.2, "ret_3m": -1.9, "ret_6m": 8.5, "ret_1y": 28.0,
         "top_stocks": [{"name": "COFORGE", "symbol": "COFORGE.NS", "rs": 89}, {"name": "PERSISTENT", "symbol": "PERSISTENT.NS", "rs": 88}, {"name": "TCS", "symbol": "TCS.NS", "rs": 87}, {"name": "INFY", "symbol": "INFY.NS", "rs": 85}],
-        "constituents": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS", "LTIM.NS", "PERSISTENT.NS", "COFORGE.NS", "MPHASIS.NS", "KPITTECH.NS"]
+        "constituents": ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS", "PERSISTENT.NS", "COFORGE.NS", "MPHASIS.NS", "KPITTECH.NS"]
     },
     {
         "id": "sec_consumer_durables",
@@ -212,8 +216,8 @@ SECTORS_DATA = [
         "color": "#0d9488",
         "x": -2.6, "y": -1.2, "quadrant": "LAGGING", "rs_rating": 44, "delta_rs": -3, "score": 44, "median_rs": 43.0, "adv_count": 11, "dec_count": 36, "total_count": 47,
         "rank": 16, "prev_rank": 13, "ret_1d": -0.4, "ret_1w": -1.4, "ret_1m": -4.2, "ret_3m": -5.5, "ret_6m": 2.0, "ret_1y": 16.5,
-        "top_stocks": [{"name": "TITAN", "symbol": "TITAN.NS", "rs": 97}, {"name": "DIXON", "symbol": "DIXON.NS", "rs": 95}, {"name": "HAVIELLS", "symbol": "HAVIELLS.NS", "rs": 89}, {"name": "VOLTAS", "symbol": "VOLTAS.NS", "rs": 86}],
-        "constituents": ["TITAN.NS", "HAVIELLS.NS", "VOLTAS.NS", "DIXON.NS", "CROMPTON.NS", "WHIRLPOOL.NS", "BLUESTARCO.NS", "KAJARIACER.NS", "BATAINDIA.NS"]
+        "top_stocks": [{"name": "TITAN", "symbol": "TITAN.NS", "rs": 97}, {"name": "DIXON", "symbol": "DIXON.NS", "rs": 95}, {"name": "HAVIELLS", "symbol": "HAVELLS.NS", "rs": 89}, {"name": "VOLTAS", "symbol": "VOLTAS.NS", "rs": 86}],
+        "constituents": ["TITAN.NS", "HAVELLS.NS", "VOLTAS.NS", "DIXON.NS", "CROMPTON.NS", "WHIRLPOOL.NS", "BLUESTARCO.NS", "KAJARIACER.NS", "BATAINDIA.NS"]
     },
     {
         "id": "sec_chemicals",
@@ -275,8 +279,8 @@ THEMES_DATA = [
         "color": "#10b981",
         "x": 6.8, "y": 2.8, "quadrant": "LEADING", "rs_rating": 86, "delta_rs": 4, "score": 73, "median_rs": 85.5, "adv_count": 7, "dec_count": 7, "total_count": 8,
         "rank": 1, "prev_rank": 1, "ret_1d": 1.2, "ret_1w": 3.4, "ret_1m": 9.3, "ret_3m": 9.8, "ret_6m": 21.8, "ret_1y": 48.0,
-        "top_stocks": [{"name": "LAURUSLABS", "symbol": "LAURUSLABS.NS", "rs": 98}, {"name": "SUVENPHAR", "symbol": "SUVENPHAR.NS", "rs": 96}, {"name": "SYNGENE", "symbol": "SYNGENE.NS", "rs": 94}, {"name": "DIVISLAB", "symbol": "DIVISLAB.NS", "rs": 91}],
-        "constituents": ["LAURUSLABS.NS", "SUVENPHAR.NS", "SYNGENE.NS", "DIVISLAB.NS", "NEULANDLAB.NS", "GRANULES.NS", "MARKSANS.NS", "HIKAL.NS"]
+        "top_stocks": [{"name": "LAURUSLABS", "symbol": "LAURUSLABS.NS", "rs": 98}, {"name": "SUVENPHAR", "symbol": "COHANCE.NS", "rs": 96}, {"name": "SYNGENE", "symbol": "SYNGENE.NS", "rs": 94}, {"name": "DIVISLAB", "symbol": "DIVISLAB.NS", "rs": 91}],
+        "constituents": ["LAURUSLABS.NS", "COHANCE.NS", "SYNGENE.NS", "DIVISLAB.NS", "NEULANDLAB.NS", "GRANULES.NS", "MARKSANS.NS", "HIKAL.NS"]
     },
     {
         "id": "th_hospitals",
@@ -300,7 +304,7 @@ THEMES_DATA = [
         "x": 2.8, "y": 2.2, "quadrant": "LEADING", "rs_rating": 78, "delta_rs": 8, "score": 67, "median_rs": 76.0, "adv_count": 2, "dec_count": 9, "total_count": 11,
         "rank": 3, "prev_rank": 8, "ret_1d": 0.5, "ret_1w": 1.8, "ret_1m": 4.4, "ret_3m": 2.6, "ret_6m": 6.8, "ret_1y": 42.0,
         "top_stocks": [{"name": "BSE", "symbol": "BSE.NS", "rs": 99}, {"name": "MCX", "symbol": "MCX.NS", "rs": 99}, {"name": "CDSL", "symbol": "CDSL.NS", "rs": 96}, {"name": "CAMS", "symbol": "CAMS.NS", "rs": 93}],
-        "constituents": ["BSE.NS", "MCX.NS", "CDSL.NS", "CAMS.NS", "ANGELONE.NS", "MOTILALOFS.NS", "ISEC.NS", "KFINTECH.NS"]
+        "constituents": ["BSE.NS", "MCX.NS", "CDSL.NS", "CAMS.NS", "ANGELONE.NS", "MOTILALOFS.NS", "KFINTECH.NS"]
     },
     {
         "id": "th_auto_components",
@@ -360,7 +364,7 @@ THEMES_DATA = [
         "x": 1.5, "y": -1.4, "quadrant": "WEAKENING", "rs_rating": 57, "delta_rs": -6, "score": 57, "median_rs": 68.0, "adv_count": 2, "dec_count": 10, "total_count": 12,
         "rank": 8, "prev_rank": 2, "ret_1d": -0.5, "ret_1w": -1.2, "ret_1m": -3.5, "ret_3m": 3.2, "ret_6m": 14.5, "ret_1y": 44.0,
         "top_stocks": [{"name": "POLYCAB", "symbol": "POLYCAB.NS", "rs": 96}, {"name": "KEI", "symbol": "KEI.NS", "rs": 94}, {"name": "RRKABEL", "symbol": "RRKABEL.NS", "rs": 91}],
-        "constituents": ["POLYCAB.NS", "KEI.NS", "RRKABEL.NS", "FINCABLES.NS", "UNIVERSAL.NS", "DIAMOND.NS"]
+        "constituents": ["POLYCAB.NS", "KEI.NS", "RRKABEL.NS", "FINCABLES.NS", "FINCABLES.NS", "KEI.NS"]
     },
     {
         "id": "th_ev",
@@ -372,7 +376,7 @@ THEMES_DATA = [
         "x": -0.6, "y": 1.2, "quadrant": "IMPROVING", "rs_rating": 61, "delta_rs": 3, "score": 56, "median_rs": 60.5, "adv_count": 3, "dec_count": 11, "total_count": 14,
         "rank": 9, "prev_rank": 15, "ret_1d": 0.2, "ret_1w": 1.1, "ret_1m": -0.1, "ret_3m": -5.0, "ret_6m": 1.1, "ret_1y": 25.0,
         "top_stocks": [{"name": "TATACHEM", "symbol": "TATACHEM.NS", "rs": 91}, {"name": "OLECTRA", "symbol": "OLECTRA.NS", "rs": 89}, {"name": "EXIDEIND", "symbol": "EXIDEIND.NS", "rs": 87}],
-        "constituents": ["TATACHEM.NS", "OLECTRA.NS", "EXIDEIND.NS", "AMARAJABAT.NS", "GREAVESCOT.NS", "SONACOMS.NS"]
+        "constituents": ["TATACHEM.NS", "OLECTRA.NS", "EXIDEIND.NS", "ARE&M.NS", "GREAVESCOT.NS", "SONACOMS.NS"]
     },
     {
         "id": "th_ems",
@@ -408,7 +412,7 @@ THEMES_DATA = [
         "x": 1.2, "y": -1.9, "quadrant": "WEAKENING", "rs_rating": 52, "delta_rs": -7, "score": 52, "median_rs": 51.5, "adv_count": 2, "dec_count": 9, "total_count": 11,
         "rank": 12, "prev_rank": 5, "ret_1d": -0.6, "ret_1w": -1.8, "ret_1m": -4.0, "ret_3m": 3.8, "ret_6m": 9.5, "ret_1y": 28.0,
         "top_stocks": [{"name": "BHARTIARTL", "symbol": "BHARTIARTL.NS", "rs": 99}, {"name": "INDUSTOWER", "symbol": "INDUSTOWER.NS", "rs": 96}],
-        "constituents": ["BHARTIARTL.NS", "INDUSTOWER.NS", "TEJASNET.NS", "STERLITE.NS", "HFCL.NS"]
+        "constituents": ["BHARTIARTL.NS", "INDUSTOWER.NS", "TEJASNET.NS", "STLTECH.NS", "HFCL.NS"]
     },
     {
         "id": "th_data_centres",
@@ -420,7 +424,7 @@ THEMES_DATA = [
         "x": -1.2, "y": -0.8, "quadrant": "LAGGING", "rs_rating": 51, "delta_rs": -3, "score": 51, "median_rs": 62.0, "adv_count": 1, "dec_count": 14, "total_count": 15,
         "rank": 13, "prev_rank": 10, "ret_1d": -0.5, "ret_1w": -1.1, "ret_1m": -4.2, "ret_3m": -2.5, "ret_6m": 8.0, "ret_1y": 32.0,
         "top_stocks": [{"name": "ANANTRAJ", "symbol": "ANANTRAJ.NS", "rs": 95}, {"name": "NETWEB", "symbol": "NETWEB.NS", "rs": 93}],
-        "constituents": ["ANANTRAJ.NS", "NETWEB.NS", "SCHNEIDER.NS", "VOLTAS.NS", "STERLITE.NS"]
+        "constituents": ["ANANTRAJ.NS", "NETWEB.NS", "SCHNEIDER.NS", "VOLTAS.NS", "STLTECH.NS"]
     },
     {
         "id": "th_building_materials",
@@ -443,8 +447,8 @@ THEMES_DATA = [
         "color": "#ec4899",
         "x": 0.5, "y": -1.5, "quadrant": "WEAKENING", "rs_rating": 50, "delta_rs": -4, "score": 50, "median_rs": 53.0, "adv_count": 3, "dec_count": 8, "total_count": 11,
         "rank": 15, "prev_rank": 11, "ret_1d": 0.1, "ret_1w": -0.6, "ret_1m": -3.2, "ret_3m": 1.5, "ret_6m": 16.0, "ret_1y": 45.0,
-        "top_stocks": [{"name": "ZOMATO", "symbol": "ZOMATO.NS", "rs": 98}, {"name": "POLICYBZR", "symbol": "POLICYBZR.NS", "rs": 96}, {"name": "NYKAA", "symbol": "NYKAA.NS", "rs": 88}],
-        "constituents": ["ZOMATO.NS", "POLICYBZR.NS", "NYKAA.NS", "PAYTM.NS", "DELHIVERY.NS", "NAZARA.NS"]
+        "top_stocks": [{"name": "ZOMATO", "symbol": "ETERNAL.NS", "rs": 98}, {"name": "POLICYBZR", "symbol": "POLICYBZR.NS", "rs": 96}, {"name": "NYKAA", "symbol": "NYKAA.NS", "rs": 88}],
+        "constituents": ["ETERNAL.NS", "POLICYBZR.NS", "NYKAA.NS", "PAYTM.NS", "DELHIVERY.NS", "NAZARA.NS"]
     },
     {
         "id": "th_power_equipment",
@@ -456,7 +460,7 @@ THEMES_DATA = [
         "x": -1.6, "y": -1.8, "quadrant": "LAGGING", "rs_rating": 48, "delta_rs": -10, "score": 48, "median_rs": 62.0, "adv_count": 2, "dec_count": 13, "total_count": 15,
         "rank": 16, "prev_rank": 6, "ret_1d": -0.6, "ret_1w": -2.4, "ret_1m": -5.8, "ret_3m": -4.2, "ret_6m": 10.5, "ret_1y": 48.0,
         "top_stocks": [{"name": "BHEL", "symbol": "BHEL.NS", "rs": 94}, {"name": "APARINDS", "symbol": "APARINDS.NS", "rs": 93}, {"name": "SUZLON", "symbol": "SUZLON.NS", "rs": 91}],
-        "constituents": ["BHEL.NS", "APARINDS.NS", "GET&D.NS", "SUZLON.NS", "CGPOWER.NS", "VOLTAMP.NS"]
+        "constituents": ["BHEL.NS", "APARINDS.NS", "GVT&D.NS", "SUZLON.NS", "CGPOWER.NS", "VOLTAMP.NS"]
     },
     {
         "id": "th_railways",
@@ -468,7 +472,7 @@ THEMES_DATA = [
         "x": -2.4, "y": -1.5, "quadrant": "LAGGING", "rs_rating": 46, "delta_rs": -8, "score": 46, "median_rs": 58.0, "adv_count": 2, "dec_count": 11, "total_count": 13,
         "rank": 17, "prev_rank": 9, "ret_1d": -0.8, "ret_1w": -2.6, "ret_1m": -6.4, "ret_3m": -7.2, "ret_6m": 4.5, "ret_1y": 42.0,
         "top_stocks": [{"name": "IRFC", "symbol": "IRFC.NS", "rs": 95}, {"name": "RVNL", "symbol": "RVNL.NS", "rs": 94}, {"name": "TITAGARH", "symbol": "TITAGARH.NS", "rs": 91}],
-        "constituents": ["IRFC.NS", "RVNL.NS", "TITAGARH.NS", "JUPITERWAG.NS", "RAILTEL.NS", "RITES.NS", "IRCTC.NS"]
+        "constituents": ["IRFC.NS", "RVNL.NS", "TITAGARH.NS", "JWL.NS", "RAILTEL.NS", "RITES.NS", "IRCTC.NS"]
     },
     {
         "id": "th_renewable_energy",
@@ -480,7 +484,7 @@ THEMES_DATA = [
         "x": -1.8, "y": -1.2, "quadrant": "LAGGING", "rs_rating": 45, "delta_rs": -5, "score": 45, "median_rs": 54.0, "adv_count": 3, "dec_count": 12, "total_count": 15,
         "rank": 18, "prev_rank": 13, "ret_1d": -0.4, "ret_1w": -1.5, "ret_1m": -5.0, "ret_3m": -5.8, "ret_6m": 6.2, "ret_1y": 38.0,
         "top_stocks": [{"name": "ADANIGREEN", "symbol": "ADANIGREEN.NS", "rs": 93}, {"name": "TATAPOWER", "symbol": "TATAPOWER.NS", "rs": 90}, {"name": "SUZLON", "symbol": "SUZLON.NS", "rs": 89}],
-        "constituents": ["ADANIGREEN.NS", "TATAPOWER.NS", "SUZLON.NS", "INOXWIND.NS", "WAAREE.NS", "PREMIERENE.NS"]
+        "constituents": ["ADANIGREEN.NS", "TATAPOWER.NS", "SUZLON.NS", "INOXWIND.NS", "WAAREEENER.NS", "PREMIERENE.NS"]
     },
     {
         "id": "th_aerospace",
@@ -491,8 +495,8 @@ THEMES_DATA = [
         "color": "#0369a1",
         "x": 1.4, "y": 0.6, "quadrant": "LEADING", "rs_rating": 44, "delta_rs": 2, "score": 44, "median_rs": 45.0, "adv_count": 2, "dec_count": 4, "total_count": 6,
         "rank": 19, "prev_rank": 21, "ret_1d": 0.5, "ret_1w": 1.8, "ret_1m": 2.1, "ret_3m": 4.5, "ret_6m": 12.0, "ret_1y": 32.0,
-        "top_stocks": [{"name": "INDIGO", "symbol": "INDIGO.NS", "rs": 98}, {"name": "TAALENT", "symbol": "TAALENT.NS", "rs": 84}],
-        "constituents": ["INDIGO.NS", "SPICEJET.NS", "TAALENT.NS"]
+        "top_stocks": [{"name": "INDIGO", "symbol": "INDIGO.NS", "rs": 98}, {"name": "HAL", "symbol": "HAL.NS", "rs": 84}],
+        "constituents": ["INDIGO.NS", "HAL.NS", "BEL.NS", "GMRAIRPORT.NS"]
     },
     {
         "id": "th_sugar_biofuels",
@@ -532,12 +536,505 @@ _RRG_CACHE = {
 _RRG_CACHE_LOCK = threading.Lock()
 
 
+def _safe_ret(series: np.ndarray, idx: int, lookback: int) -> float:
+    """Computes percentage return ending at `idx` over `lookback` bars safely."""
+    if idx < 1:
+        return 0.0
+    prev_idx = max(0, idx - lookback)
+    curr = float(series[idx])
+    prev = float(series[prev_idx])
+    if prev <= 0 or np.isnan(curr) or np.isnan(prev):
+        return 0.0
+    return ((curr / prev) - 1.0) * 100.0
+
+
+def _compute_rs_ratings_at_offset(close_mat: pd.DataFrame, offset: int) -> dict:
+    """
+    Computes cross-sectional IBD/Market-Strength RS Rating (1-99) for every stock
+    at `len(close_mat) - 1 - offset`.
+    """
+    n_rows = len(close_mat)
+    idx = n_rows - 1 - offset
+    if idx < 22:
+        return {col: 50.0 for col in close_mat.columns}
+
+    raw_scores = {}
+    for col in close_mat.columns:
+        vals = close_mat[col].values
+        if np.isnan(vals[idx]):
+            continue
+        r1m = _safe_ret(vals, idx, 21)
+        r3m = _safe_ret(vals, idx, 63)
+        r6m = _safe_ret(vals, idx, 126)
+        r1y = _safe_ret(vals, idx, 250)
+        raw_scores[col] = (0.40 * r3m) + (0.25 * r6m) + (0.20 * r1m) + (0.15 * r1y)
+
+    if not raw_scores:
+        return {col: 50.0 for col in close_mat.columns}
+
+    s = pd.Series(raw_scores)
+    pct_ranks = s.rank(pct=True, method="average") * 98.0 + 1.0
+    return {sym: round(float(val), 1) for sym, val in pct_ranks.items()}
+
+
+def _compute_group_scores_at_offset(
+    close_mat: pd.DataFrame,
+    rs_map: dict,
+    offset: int,
+) -> dict:
+    """Computes composite Market Strength score for every group at a historical offset."""
+    n_rows = len(close_mat)
+    idx = n_rows - 1 - offset
+    scores = {}
+    for g in ALL_GROUPS_DATA:
+        constituents = [s for s in g.get("constituents", []) if s in close_mat.columns]
+        if not constituents or idx < 5:
+            scores[g["id"]] = float(g.get("score", 50.0))
+            continue
+
+        rs_vals = []
+        above_50 = 0
+        above_200 = 0
+        valid_cnt = 0
+
+        for sym in constituents:
+            vals = close_mat[sym].values
+            c_now = vals[idx]
+            if np.isnan(c_now) or c_now <= 0:
+                continue
+            valid_cnt += 1
+            rs_vals.append(rs_map.get(sym, 50.0))
+
+            start_50 = max(0, idx - 49)
+            sma50 = float(np.nanmean(vals[start_50:idx + 1]))
+            if c_now > sma50:
+                above_50 += 1
+
+            start_200 = max(0, idx - 199)
+            sma200 = float(np.nanmean(vals[start_200:idx + 1]))
+            if c_now > sma200:
+                above_200 += 1
+
+        if valid_cnt == 0:
+            scores[g["id"]] = float(g.get("score", 50.0))
+            continue
+
+        med_rs = float(np.median(rs_vals)) if rs_vals else 50.0
+        pct_50 = (above_50 / valid_cnt) * 100.0
+        pct_200 = (above_200 / valid_cnt) * 100.0
+        scores[g["id"]] = round(0.60 * med_rs + 0.20 * pct_50 + 0.20 * pct_200, 2)
+
+    return scores
+
+
+def _rank_groups_by_score(score_map: dict, group_ids: list) -> dict:
+    """Returns {group_id: 1-based rank} sorted descending by score."""
+    ordered = sorted(group_ids, key=lambda gid: (-score_map.get(gid, 0.0), gid))
+    return {gid: r + 1 for r, gid in enumerate(ordered)}
+
+
+def _build_movement_buckets(groups: list, curr_rank_key: str, prev_rank_key: str) -> dict:
+    """Builds climbers & fallers lists for a given rank comparison."""
+    climbers = []
+    fallers = []
+    for g in groups:
+        c_rank = g[curr_rank_key]
+        p_rank = g[prev_rank_key]
+        diff = p_rank - c_rank
+        entry = {
+            "id": g["id"],
+            "name": g["name"],
+            "type": g["type"],
+            "rank": c_rank,
+            "prev_rank": p_rank,
+            "rank_change": diff,
+        }
+        if diff > 0:
+            climbers.append(entry)
+        elif diff < 0:
+            fallers.append(entry)
+    climbers.sort(key=lambda x: (-x["rank_change"], x["rank"]))
+    fallers.sort(key=lambda x: (x["rank_change"], -x["rank"]))
+    return {"climbers": climbers[:8], "fallers": fallers[:8]}
+
+
+def _compute_live_studio_payload(
+    benchmark: str = "^CRSLDX",
+    timeframe: str = "1wk",
+    tail_length: int = 8,
+    df_provider=None,
+):
+    """
+    Fetches live 1-year daily OHLCV for all 263 constituent stocks + benchmark
+    and computes real RS ratings, 4-quadrant RRG coordinates & historical trails,
+    breadth (Adv/Dec, >50 DMA, >200 DMA), rank shifts (1D/1W/3W/6W), and
+    comparative performance sparklines (1W, 1M, 3M).
+    """
+    if df_provider is None:
+        return None
+
+    unique_stocks = sorted({
+        sym
+        for g in ALL_GROUPS_DATA
+        for sym in g.get("constituents", [])
+    })
+    fetch_list = list(unique_stocks)
+    for b_sym in (benchmark, "^NSEI"):
+        if b_sym and b_sym not in fetch_list:
+            fetch_list.append(b_sym)
+
+    df_map = df_provider(fetch_list, period="1y", interval="1d")
+    if not df_map:
+        return None
+
+    # Resolve benchmark series (fallback to ^NSEI if ^CRSLDX unavailable)
+    bench_df = df_map.get(benchmark)
+    used_benchmark = benchmark
+    if bench_df is None or bench_df.empty or len(bench_df) < 30:
+        bench_df = df_map.get("^NSEI")
+        used_benchmark = "^NSEI"
+
+    # Build aligned close matrix keyed by UTC date string
+    series_dict = {}
+    for sym in unique_stocks:
+        sdf = df_map.get(sym)
+        if sdf is not None and not sdf.empty and len(sdf) >= 30:
+            dt_idx = pd.to_datetime(sdf["time"], unit="s", utc=True).dt.strftime("%Y-%m-%d")
+            s = pd.Series(sdf["close"].values, index=dt_idx)
+            s = s[~s.index.duplicated(keep="last")]
+            series_dict[sym] = s
+
+    if len(series_dict) < 20:
+        return None
+
+    close_mat = pd.DataFrame(series_dict).sort_index()
+    # Forward-fill occasional single-day holidays/halts, keep recent 260 trading days
+    close_mat = close_mat.ffill(limit=3).tail(260)
+    n_rows = len(close_mat)
+    if n_rows < 30:
+        return None
+
+    dates_index = list(close_mat.index)
+
+    # Align benchmark returns on the same dates
+    if bench_df is not None and not bench_df.empty:
+        b_idx = pd.to_datetime(bench_df["time"], unit="s", utc=True).dt.strftime("%Y-%m-%d")
+        b_series = pd.Series(bench_df["close"].values, index=b_idx)
+        b_series = b_series[~b_series.index.duplicated(keep="last")].reindex(close_mat.index).ffill()
+        bench_vals = b_series.values
+    else:
+        # Synthetic equal-weight market average fallback if index ticker failed
+        bench_vals = close_mat.mean(axis=1).values
+
+    # Compute RS maps for today (0), 1M ago (21), and historical trail points
+    step_bars = 5 if timeframe == "1wk" else 1
+    trail_offsets = [k * step_bars for k in range(tail_length - 1, -1, -1)]
+    needed_offsets = set(trail_offsets) | {0, 1, 5, 15, 21, 30}
+
+    rs_by_offset = {}
+    for off in needed_offsets:
+        if off < n_rows - 22:
+            rs_by_offset[off] = _compute_rs_ratings_at_offset(close_mat, off)
+        else:
+            rs_by_offset[off] = {col: 50.0 for col in close_mat.columns}
+
+    # Compute scores at 0, 1, 5, 15, 30 trading days ago for rank shifts
+    scores_0 = _compute_group_scores_at_offset(close_mat, rs_by_offset[0], 0)
+    scores_1d = _compute_group_scores_at_offset(close_mat, rs_by_offset[1], 1)
+    scores_1w = _compute_group_scores_at_offset(close_mat, rs_by_offset[5], 5)
+    scores_3w = _compute_group_scores_at_offset(close_mat, rs_by_offset[15], 15)
+    scores_6w = _compute_group_scores_at_offset(close_mat, rs_by_offset[30], 30)
+
+    sector_ids = [g["id"] for g in ALL_GROUPS_DATA if g["type"] == "sector"]
+    theme_ids = [g["id"] for g in ALL_GROUPS_DATA if g["type"] == "theme"]
+    all_ids = [g["id"] for g in ALL_GROUPS_DATA]
+
+    # Category-specific ranks (for Strongest cards & Money movement)
+    sec_ranks_0 = _rank_groups_by_score(scores_0, sector_ids)
+    sec_ranks_1d = _rank_groups_by_score(scores_1d, sector_ids)
+    sec_ranks_1w = _rank_groups_by_score(scores_1w, sector_ids)
+    sec_ranks_3w = _rank_groups_by_score(scores_3w, sector_ids)
+    sec_ranks_6w = _rank_groups_by_score(scores_6w, sector_ids)
+
+    th_ranks_0 = _rank_groups_by_score(scores_0, theme_ids)
+    th_ranks_1d = _rank_groups_by_score(scores_1d, theme_ids)
+    th_ranks_1w = _rank_groups_by_score(scores_1w, theme_ids)
+    th_ranks_3w = _rank_groups_by_score(scores_3w, theme_ids)
+    th_ranks_6w = _rank_groups_by_score(scores_6w, theme_ids)
+
+    all_ranks_0 = _rank_groups_by_score(scores_0, all_ids)
+    all_ranks_1d = _rank_groups_by_score(scores_1d, all_ids)
+    all_ranks_1w = _rank_groups_by_score(scores_1w, all_ids)
+    all_ranks_3w = _rank_groups_by_score(scores_3w, all_ids)
+    all_ranks_6w = _rank_groups_by_score(scores_6w, all_ids)
+
+    idx_now = n_rows - 1
+    bench_ret_3m_now = _safe_ret(bench_vals, idx_now, 63)
+
+    processed_groups = []
+    for g in ALL_GROUPS_DATA:
+        item = dict(g)
+        gid = g["id"]
+        constituents = [s for s in g.get("constituents", []) if s in close_mat.columns]
+
+        if not constituents:
+            processed_groups.append(item)
+            continue
+
+        # Live returns per constituent
+        rets_1d, rets_1w, rets_1m, rets_3m, rets_6m, rets_1y = [], [], [], [], [], []
+        rs_now_list = []
+        rs_1m_list = []
+        adv_cnt = 0
+        dec_cnt = 0
+        above_50 = 0
+        above_200 = 0
+        stock_rs_pairs = []
+
+        for sym in constituents:
+            vals = close_mat[sym].values
+            c_now = vals[idx_now]
+            if np.isnan(c_now) or c_now <= 0:
+                continue
+
+            r1d = _safe_ret(vals, idx_now, 1)
+            r1w = _safe_ret(vals, idx_now, 5)
+            r1m = _safe_ret(vals, idx_now, 21)
+            r3m = _safe_ret(vals, idx_now, 63)
+            r6m = _safe_ret(vals, idx_now, 126)
+            r1y = _safe_ret(vals, idx_now, 250)
+
+            rets_1d.append(r1d)
+            rets_1w.append(r1w)
+            rets_1m.append(r1m)
+            rets_3m.append(r3m)
+            rets_6m.append(r6m)
+            rets_1y.append(r1y)
+
+            if r1d > 0:
+                adv_cnt += 1
+            else:
+                dec_cnt += 1
+
+            sma50 = float(np.nanmean(vals[max(0, idx_now - 49):idx_now + 1]))
+            sma200 = float(np.nanmean(vals[max(0, idx_now - 199):idx_now + 1]))
+            if c_now > sma50:
+                above_50 += 1
+            if c_now > sma200:
+                above_200 += 1
+
+            s_rs_now = rs_by_offset[0].get(sym, 50.0)
+            s_rs_1m = rs_by_offset[21].get(sym, 50.0)
+            rs_now_list.append(s_rs_now)
+            rs_1m_list.append(s_rs_1m)
+            stock_rs_pairs.append({"name": sym.replace(".NS", ""), "symbol": sym, "rs": int(round(s_rs_now))})
+
+        valid_cnt = len(rs_now_list)
+        if valid_cnt == 0:
+            processed_groups.append(item)
+            continue
+
+        med_1d = round(float(np.median(rets_1d)), 1)
+        med_1w = round(float(np.median(rets_1w)), 1)
+        med_1m = round(float(np.median(rets_1m)), 1)
+        med_3m = round(float(np.median(rets_3m)), 1)
+        med_6m = round(float(np.median(rets_6m)), 1)
+        med_1y = round(float(np.median(rets_1y)), 1)
+
+        med_rs_now = round(float(np.median(rs_now_list)), 1)
+        med_rs_1m = round(float(np.median(rs_1m_list)), 1)
+        delta_rs = round(med_rs_now - med_rs_1m, 1)
+
+        pct_50 = (above_50 / valid_cnt) * 100.0
+        pct_200 = (above_200 / valid_cnt) * 100.0
+        comp_score = int(round(0.60 * med_rs_now + 0.20 * pct_50 + 0.20 * pct_200))
+
+        # RRG coordinates
+        curr_x = round(med_3m - bench_ret_3m_now, 2)
+        curr_y = round(delta_rs, 2)
+        if curr_x >= 0 and curr_y >= 0:
+            quad = "LEADING"
+        elif curr_x < 0 and curr_y >= 0:
+            quad = "IMPROVING"
+        elif curr_x >= 0 and curr_y < 0:
+            quad = "WEAKENING"
+        else:
+            quad = "LAGGING"
+
+        # Historical live RRG trail
+        tail = []
+        for off in trail_offsets:
+            t_idx = max(22, idx_now - off)
+            t_date = dates_index[t_idx]
+            if off == 0:
+                tail.append({"date": t_date, "x": curr_x, "y": curr_y})
+                continue
+
+            b_ret_t = _safe_ret(bench_vals, t_idx, 63)
+            g_rets_t = []
+            g_rs_t = []
+            g_rs_prev_t = []
+            prev_t_idx = max(0, t_idx - 21)
+            prev_off = min(n_rows - 23, off + 21)
+            if prev_off not in rs_by_offset:
+                rs_by_offset[prev_off] = _compute_rs_ratings_at_offset(close_mat, prev_off)
+
+            for sym in constituents:
+                vals = close_mat[sym].values
+                if np.isnan(vals[t_idx]) or vals[t_idx] <= 0:
+                    continue
+                g_rets_t.append(_safe_ret(vals, t_idx, 63))
+                g_rs_t.append(rs_by_offset[off].get(sym, 50.0))
+                g_rs_prev_t.append(rs_by_offset[prev_off].get(sym, 50.0))
+
+            if g_rets_t and g_rs_t:
+                tx = round(float(np.median(g_rets_t)) - b_ret_t, 2)
+                ty = round(float(np.median(g_rs_t)) - float(np.median(g_rs_prev_t)), 2)
+            else:
+                tx, ty = curr_x, curr_y
+            tail.append({"date": t_date, "x": tx, "y": ty})
+
+        # Real daily cumulative median sparklines for 1W (5d), 1M (21d), 3M (63d)
+        sub_df = close_mat[constituents]
+
+        def _make_sparkline(days: int) -> list:
+            w = min(days, n_rows - 1)
+            if w < 2:
+                return [0.0, 0.0]
+            window = sub_df.iloc[-(w + 1):]
+            base = window.iloc[0].replace(0, np.nan)
+            cum_ret = ((window.divide(base, axis=1)) - 1.0) * 100.0
+            med_series = cum_ret.median(axis=1).fillna(0.0).values
+            # Downsample 3M/1M slightly if needed or keep clean points
+            if len(med_series) > 25:
+                idxs = np.linspace(0, len(med_series) - 1, 25, dtype=int)
+                med_series = med_series[idxs]
+            return [round(float(v), 2) for v in med_series]
+
+        spark_1w = _make_sparkline(5)
+        spark_1m = _make_sparkline(21)
+        spark_3m = _make_sparkline(63)
+
+        # Top 4 constituent stocks sorted by live RS
+        stock_rs_pairs.sort(key=lambda s: (-s["rs"], s["name"]))
+
+        # Ranks (category-specific for cards, plus global for 'all')
+        if g["type"] == "sector":
+            r0, r1d, r1w, r3w, r6w = sec_ranks_0[gid], sec_ranks_1d[gid], sec_ranks_1w[gid], sec_ranks_3w[gid], sec_ranks_6w[gid]
+        else:
+            r0, r1d, r1w, r3w, r6w = th_ranks_0[gid], th_ranks_1d[gid], th_ranks_1w[gid], th_ranks_3w[gid], th_ranks_6w[gid]
+
+        item.update({
+            "x": curr_x,
+            "y": curr_y,
+            "current_x": curr_x,
+            "current_y": curr_y,
+            "quadrant": quad,
+            "rs_rating": int(round(med_rs_now)),
+            "median_rs": med_rs_now,
+            "delta_rs": delta_rs,
+            "score": comp_score,
+            "adv_count": adv_cnt,
+            "dec_count": dec_cnt,
+            "total_count": valid_cnt,
+            "ret_1d": med_1d,
+            "ret_1w": med_1w,
+            "ret_1m": med_1m,
+            "ret_3m": med_3m,
+            "ret_6m": med_6m,
+            "ret_1y": med_1y,
+            "top_stocks": stock_rs_pairs[:4],
+            "tail": tail,
+            "sparkline_1w": spark_1w,
+            "sparkline_1m": spark_1m,
+            "sparkline_3m": spark_3m,
+            "rank": r0,
+            "prev_rank": r3w,
+            "rank_change": r3w - r0,
+            "rank_1d": r1d,
+            "rank_1w": r1w,
+            "rank_3w": r3w,
+            "rank_6w": r6w,
+            "all_rank": all_ranks_0[gid],
+            "all_rank_1d": all_ranks_1d[gid],
+            "all_rank_1w": all_ranks_1w[gid],
+            "all_rank_3w": all_ranks_3w[gid],
+            "all_rank_6w": all_ranks_6w[gid],
+        })
+        processed_groups.append(item)
+
+    sectors_list = sorted([g for g in processed_groups if g["type"] == "sector"], key=lambda s: s["rank"])
+    themes_list = sorted([g for g in processed_groups if g["type"] == "theme"], key=lambda t: t["rank"])
+
+    money_movement = {
+        "1d": {
+            "all": _build_movement_buckets(processed_groups, "all_rank", "all_rank_1d"),
+            "sectors": _build_movement_buckets(sectors_list, "rank", "rank_1d"),
+            "themes": _build_movement_buckets(themes_list, "rank", "rank_1d"),
+        },
+        "1w": {
+            "all": _build_movement_buckets(processed_groups, "all_rank", "all_rank_1w"),
+            "sectors": _build_movement_buckets(sectors_list, "rank", "rank_1w"),
+            "themes": _build_movement_buckets(themes_list, "rank", "rank_1w"),
+        },
+        "3w": {
+            "all": _build_movement_buckets(processed_groups, "all_rank", "all_rank_3w"),
+            "sectors": _build_movement_buckets(sectors_list, "rank", "rank_3w"),
+            "themes": _build_movement_buckets(themes_list, "rank", "rank_3w"),
+        },
+        "6w": {
+            "all": _build_movement_buckets(processed_groups, "all_rank", "all_rank_6w"),
+            "sectors": _build_movement_buckets(sectors_list, "rank", "rank_6w"),
+            "themes": _build_movement_buckets(themes_list, "rank", "rank_6w"),
+        },
+    }
+
+    top_day = max(processed_groups, key=lambda g: g["ret_1d"])
+    top_week = max(processed_groups, key=lambda g: g["ret_1w"])
+    top_month = max(processed_groups, key=lambda g: g["ret_1m"])
+
+    return {
+        "benchmark": used_benchmark,
+        "timeframe": timeframe,
+        "tail_length": tail_length,
+        "data_mode": "LIVE",
+        "stocks_loaded": len(series_dict),
+        "as_of_date": dates_index[-1],
+        "total_count": len(processed_groups),
+        "sectors_count": len(sectors_list),
+        "themes_count": len(themes_list),
+        "all_groups": processed_groups,
+        "sectors": sectors_list,
+        "themes": themes_list,
+        "climbers": {
+            "all": money_movement["3w"]["all"]["climbers"],
+            "sectors": money_movement["3w"]["sectors"]["climbers"],
+            "themes": money_movement["3w"]["themes"]["climbers"],
+        },
+        "fallers": {
+            "all": money_movement["3w"]["all"]["fallers"],
+            "sectors": money_movement["3w"]["sectors"]["fallers"],
+            "themes": money_movement["3w"]["themes"]["fallers"],
+        },
+        "money_movement": money_movement,
+        "performance_leaders": {
+            "day": {"name": top_day["name"], "ret": top_day["ret_1d"]},
+            "week": {"name": top_week["name"], "ret": top_week["ret_1w"]},
+            "month": {"name": top_month["name"], "ret": top_month["ret_1m"]},
+        },
+        "summary": {
+            "leading_count": sum(1 for g in processed_groups if g["quadrant"] == "LEADING"),
+            "improving_count": sum(1 for g in processed_groups if g["quadrant"] == "IMPROVING"),
+            "weakening_count": sum(1 for g in processed_groups if g["quadrant"] == "WEAKENING"),
+            "lagging_count": sum(1 for g in processed_groups if g["quadrant"] == "LAGGING"),
+        },
+        "scanned_at": datetime.now(IST).strftime("%H:%M:%S IST"),
+    }
+
+
 def _build_studio_payload(benchmark: str = "^NSEI", timeframe: str = "1wk", tail_length: int = 8):
     """
-    Constructs comprehensive studio payload covering:
-    - 41 Groups (20 Sectors + 21 Themes) with RRG coordinates & multi-period performance
-    - Money Movement (Climbers & Fallers with rank changes)
-    - Group Performance (1W, 1M, 3M multi-line comparative sparklines)
+    Offline/fallback studio payload if live market data is unreachable.
     """
     now = datetime.now(timezone.utc)
     dates = [(now - pd.Timedelta(weeks=tail_length - i - 1)).strftime("%Y-%m-%d") for i in range(tail_length)]
@@ -547,7 +1044,6 @@ def _build_studio_payload(benchmark: str = "^NSEI", timeframe: str = "1wk", tail
         item = dict(g)
         curr_x = item["x"]
         curr_y = item["y"]
-        # Generate realistic clockwise rotational trail
         tail = []
         for i in range(tail_length):
             steps_back = tail_length - 1 - i
@@ -558,45 +1054,25 @@ def _build_studio_payload(benchmark: str = "^NSEI", timeframe: str = "1wk", tail
         item["current_x"] = curr_x
         item["current_y"] = curr_y
 
-        # Realistic sparkline series starting at 0%
         r1w = item["ret_1w"]
         r1m = item["ret_1m"]
         r3m = item["ret_3m"]
         item["sparkline_1w"] = [0.0, round(r1w * 0.2, 2), round(r1w * 0.45, 2), round(r1w * 0.7, 2), round(r1w * 0.85, 2), r1w]
         item["sparkline_1m"] = [0.0, round(r1m * 0.1, 2), round(r1m * 0.3, 2), round(r1m * 0.5, 2), round(r1m * 0.75, 2), r1m]
         item["sparkline_3m"] = [0.0, round(r3m * 0.15, 2), round(r3m * 0.35, 2), round(r3m * 0.6, 2), round(r3m * 0.8, 2), r3m]
-        
-        # Calculate rank change
         item["rank_change"] = item["prev_rank"] - item["rank"]
         processed_groups.append(item)
 
-    # Sort sectors and themes
-    sectors_list = [g for g in processed_groups if g["type"] == "sector"]
-    themes_list = [g for g in processed_groups if g["type"] == "theme"]
+    sectors_list = sorted([g for g in processed_groups if g["type"] == "sector"], key=lambda s: s["rank"])
+    themes_list = sorted([g for g in processed_groups if g["type"] == "theme"], key=lambda t: t["rank"])
 
-    sectors_list.sort(key=lambda s: s["rank"])
-    themes_list.sort(key=lambda t: t["rank"])
+    all_climbers = sorted([g for g in processed_groups if g["rank_change"] > 0], key=lambda g: g["rank_change"], reverse=True)
+    all_fallers = sorted([g for g in processed_groups if g["rank_change"] < 0], key=lambda g: g["rank_change"])
+    sector_climbers = sorted([g for g in sectors_list if g["rank_change"] > 0], key=lambda g: g["rank_change"], reverse=True)
+    sector_fallers = sorted([g for g in sectors_list if g["rank_change"] < 0], key=lambda g: g["rank_change"])
+    theme_climbers = sorted([g for g in themes_list if g["rank_change"] > 0], key=lambda g: g["rank_change"], reverse=True)
+    theme_fallers = sorted([g for g in themes_list if g["rank_change"] < 0], key=lambda g: g["rank_change"])
 
-    # Money Movement: Climbers & Fallers
-    all_climbers = [g for g in processed_groups if g["rank_change"] > 0]
-    all_climbers.sort(key=lambda g: g["rank_change"], reverse=True)
-
-    all_fallers = [g for g in processed_groups if g["rank_change"] < 0]
-    all_fallers.sort(key=lambda g: g["rank_change"])
-
-    sector_climbers = [g for g in sectors_list if g["rank_change"] > 0]
-    sector_climbers.sort(key=lambda g: g["rank_change"], reverse=True)
-
-    sector_fallers = [g for g in sectors_list if g["rank_change"] < 0]
-    sector_fallers.sort(key=lambda g: g["rank_change"])
-
-    theme_climbers = [g for g in themes_list if g["rank_change"] > 0]
-    theme_climbers.sort(key=lambda g: g["rank_change"], reverse=True)
-
-    theme_fallers = [g for g in themes_list if g["rank_change"] < 0]
-    theme_fallers.sort(key=lambda g: g["rank_change"])
-
-    # Multi-period leaders for summary badge
     top_day = max(processed_groups, key=lambda g: g["ret_1d"])
     top_week = max(processed_groups, key=lambda g: g["ret_1w"])
     top_month = max(processed_groups, key=lambda g: g["ret_1m"])
@@ -605,55 +1081,96 @@ def _build_studio_payload(benchmark: str = "^NSEI", timeframe: str = "1wk", tail
         "benchmark": benchmark,
         "timeframe": timeframe,
         "tail_length": tail_length,
+        "data_mode": "FALLBACK",
+        "stocks_loaded": 0,
+        "as_of_date": dates[-1],
         "total_count": len(processed_groups),
         "sectors_count": len(sectors_list),
         "themes_count": len(themes_list),
         "all_groups": processed_groups,
         "sectors": sectors_list,
         "themes": themes_list,
-        "climbers": {
-            "all": all_climbers[:8],
-            "sectors": sector_climbers[:8],
-            "themes": theme_climbers[:8]
-        },
-        "fallers": {
-            "all": all_fallers[:8],
-            "sectors": sector_fallers[:8],
-            "themes": theme_fallers[:8]
-        },
+        "climbers": {"all": all_climbers[:8], "sectors": sector_climbers[:8], "themes": theme_climbers[:8]},
+        "fallers": {"all": all_fallers[:8], "sectors": sector_fallers[:8], "themes": theme_fallers[:8]},
         "performance_leaders": {
             "day": {"name": top_day["name"], "ret": top_day["ret_1d"]},
             "week": {"name": top_week["name"], "ret": top_week["ret_1w"]},
-            "month": {"name": top_month["name"], "ret": top_month["ret_1m"]}
+            "month": {"name": top_month["name"], "ret": top_month["ret_1m"]},
         },
         "summary": {
             "leading_count": sum(1 for g in processed_groups if g["quadrant"] == "LEADING"),
             "improving_count": sum(1 for g in processed_groups if g["quadrant"] == "IMPROVING"),
             "weakening_count": sum(1 for g in processed_groups if g["quadrant"] == "WEAKENING"),
-            "lagging_count": sum(1 for g in processed_groups if g["quadrant"] == "LAGGING")
+            "lagging_count": sum(1 for g in processed_groups if g["quadrant"] == "LAGGING"),
         },
-        "scanned_at": datetime.now(IST).strftime("%H:%M:%S IST")
+        "scanned_at": datetime.now(IST).strftime("%H:%M:%S IST"),
     }
 
 
-def get_sector_rotation_matrix(benchmark: str = "^NSEI", timeframe: str = "1wk", tail_length: int = 8, df_provider=None):
+def get_sector_rotation_matrix(
+    benchmark: str = "^CRSLDX",
+    timeframe: str = "1wk",
+    tail_length: int = 8,
+    df_provider=None,
+    force: bool = False,
+):
     """
     Main entry point for Sector Rotation & Market Strength analysis.
-    Returns in < 5ms from cached or comprehensive studio model.
+    Computes live RS ratings, RRG coordinates, breadth, rank shifts, and sparklines
+    from Yahoo Finance OHLCV via `df_provider`, with a 15-minute memory + disk cache.
     """
     global _RRG_CACHE
     cache_key = f"{benchmark}_{timeframe}_{tail_length}"
     now = time.time()
 
-    with _RRG_CACHE_LOCK:
-        if _RRG_CACHE["data"] and _RRG_CACHE["key"] == cache_key and (now - _RRG_CACHE["timestamp"]) < 300:
-            return _RRG_CACHE["data"]
+    if not force:
+        with _RRG_CACHE_LOCK:
+            if _RRG_CACHE["data"] and _RRG_CACHE["key"] == cache_key and (now - _RRG_CACHE["timestamp"]) < 900:
+                return _RRG_CACHE["data"]
 
-    payload = _build_studio_payload(benchmark=benchmark, timeframe=timeframe, tail_length=tail_length)
+        # Check disk cache (valid for 15 minutes)
+        if os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    disk_obj = json.load(f)
+                if (
+                    disk_obj.get("key") == cache_key
+                    and (now - disk_obj.get("timestamp", 0)) < 900
+                    and disk_obj.get("data", {}).get("data_mode") == "LIVE"
+                ):
+                    with _RRG_CACHE_LOCK:
+                        _RRG_CACHE["data"] = disk_obj["data"]
+                        _RRG_CACHE["key"] = cache_key
+                        _RRG_CACHE["timestamp"] = disk_obj["timestamp"]
+                    return disk_obj["data"]
+            except Exception:
+                pass
+
+    payload = None
+    if df_provider is not None:
+        try:
+            payload = _compute_live_studio_payload(
+                benchmark=benchmark,
+                timeframe=timeframe,
+                tail_length=tail_length,
+                df_provider=df_provider,
+            )
+        except Exception:
+            payload = None
+
+    if payload is None:
+        payload = _build_studio_payload(benchmark=benchmark, timeframe=timeframe, tail_length=tail_length)
 
     with _RRG_CACHE_LOCK:
         _RRG_CACHE["data"] = payload
         _RRG_CACHE["key"] = cache_key
         _RRG_CACHE["timestamp"] = now
+
+    if payload.get("data_mode") == "LIVE":
+        try:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"key": cache_key, "timestamp": now, "data": payload}, f)
+        except Exception:
+            pass
 
     return payload
